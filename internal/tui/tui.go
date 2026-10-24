@@ -70,13 +70,13 @@ func (v *view) View() tea.View {
 		top[0] += faint.Render("  " + safe(v.title))
 	}
 	if it.Note != "" {
-		top = append(top, safe(it.Note))
+		top = append(top, v.wrap(lipgloss.NewStyle(), it.Note)...)
 	}
 	if it.Invalid != "" {
-		top = append(top, removed.Render(safe(it.Invalid)))
+		top = append(top, v.wrap(removed, it.Invalid)...)
 	}
 	if v.m.Status != "" {
-		top = append(top, faint.Render(safe(v.m.Status)))
+		top = append(top, v.wrap(faint, v.m.Status)...)
 	}
 	top = append(top, "")
 
@@ -97,6 +97,14 @@ func (v *view) View() tea.View {
 	tv := tea.NewView(strings.Join(lines, "\n"))
 	tv.AltScreen = true
 	return tv
+}
+
+// wrap renders text in style, wrapped to the pane width, as lines.
+func (v *view) wrap(style lipgloss.Style, text string) []string {
+	if v.width > 0 {
+		style = style.Width(v.width)
+	}
+	return strings.Split(style.Render(safe(text)), "\n")
 }
 
 func line(l tour.Line) string {
