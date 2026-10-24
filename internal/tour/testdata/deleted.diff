@@ -1,0 +1,8 @@
+diff --git a/gone.go b/gone.go
+deleted file mode 100644
+index b77b4eb..0000000
+--- a/gone.go
++++ /dev/null
+@@ -1,2 +0,0 @@
+-x
+-y
