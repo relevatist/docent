@@ -37,13 +37,14 @@ func TestOutputWriteFails(t *testing.T) {
 		t.Error("usage: want write error")
 	}
 	tempHome(t)
+	fakeHarnesses(t)
 	gitRepo(t)
 	f := workstream(t)
 	for name, run := range map[string]func(w io.Writer) int{
 		"diff --help":    func(w io.Writer) int { return diffCmd(f, []string{"--help"}, w, io.Discard) },
 		"diff":           func(w io.Writer) int { return diffCmd(f, nil, w, io.Discard) },
-		"install skill":  func(w io.Writer) int { return installCmd([]string{"skill", "claude"}, w, io.Discard) },
-		"install --help": func(w io.Writer) int { return installCmd([]string{"--help"}, io.Discard, w) },
+		"install codex":  func(w io.Writer) int { return installCmd([]string{"codex"}, w, io.Discard, false, nil) },
+		"install --help": func(w io.Writer) int { return installCmd([]string{"--help"}, io.Discard, w, false, nil) },
 		"open --help":    func(w io.Writer) int { return openCmd(f, []string{"--help"}, w) },
 		"reload --help":  func(w io.Writer) int { return reloadCmd(f, []string{"--help"}, w) },
 		"tour --help":    func(w io.Writer) int { return tourCmd(f, []string{"--help"}, nil, w) },

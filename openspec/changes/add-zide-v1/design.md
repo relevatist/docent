@@ -6,7 +6,7 @@ Greenfield repo. See proposal.md - Why. Facts checked on the target machine:
 
 - Zellij 0.45.1: `write-chars`, `paste`, `send-keys` take `--pane-id`; `list-panes --all --json` lists panes with tab info; `new-pane` has `--stacked`, `--name`, `--cwd`, `--close-on-exit`; `new-tab` and the top-level command accept `--layout-string`.
 - Helix 25.07.1: no remote-control API. Command-line expansions include `%{buffer_name}`, `%{selection_line_start}`, `%{selection_line_end}`. `:reload-all` discards unsaved changes in all buffers.
-- oh-my-pi (`omp`) reads skills from `.claude` and `.codex` directories and loads TypeScript extensions. 7.4 result (omp 18.12.6 source, `packages/coding-agent/src/extensibility/extensions/types.ts`, and `docs/extensions.md`, `docs/extension-loading.md`): there is no dedicated after-edit event, but `pi.on("tool_result", ...)` fires after every tool with `toolName`, `input`, and `isError`. File-writing tools are `edit` (also covers `apply_patch` mode) and `write`; `ast_edit` only previews, and `resolve` applies it. `pi.exec(cmd, args)` runs a command and does not throw on non-zero exit. User extensions load from `~/.omp/agent/extensions/*.ts`.
+- oh-my-pi (`omp`) reads skills from `~/.claude/skills`, `~/.agents/skills`, and Claude Code marketplace plugins (`~/.claude/plugins/cache/`), and loads TypeScript extensions. Same-named skills with identical content collapse with no warning (omp 18.12.6 binary). 7.4 result (omp 18.12.6 source, `packages/coding-agent/src/extensibility/extensions/types.ts`, and `docs/extensions.md`, `docs/extension-loading.md`): there is no dedicated after-edit event, but `pi.on("tool_result", ...)` fires after every tool with `toolName`, `input`, and `isError`. File-writing tools are `edit` (also covers `apply_patch` mode) and `write`; `ast_edit` only previews, and `resolve` applies it. `pi.exec(cmd, args)` runs a command and does not throw on non-zero exit. User extensions load from `~/.omp/agent/extensions/*.ts`.
 
 ## Goals / Non-Goals
 
@@ -33,7 +33,7 @@ internal/send             ref formatting per harness
 internal/tour             parse, git diff, hunk mapping, coverage, step model
 internal/tui              bubbletea view over tour step model
 internal/launch           layout KDL (embedded template), tab/session start
-assets/                   SKILL.md, helix keys, claude hook, omp extension (go:embed)
+assets/                   claude-plugin/ (skill, hook, plugin.json), helix keys, omp extension (go:embed)
 ```
 
 `zellij.Runner` is the only interface. It exists so tests can assert the exact `zellij action` argv without a running session.
@@ -80,18 +80,31 @@ outside, exited: zellij delete-session <name> ; then the "outside, new" path   (
 ```
 The KDL template has the editor at 60% on the left, harness above shell on the right, with `hx` and the harness command filled in. `<name>` is `--name` or the directory basename. The harness is a property of the tab: `zide send` reads the harness pane's `terminal_command` from `list-panes --all --json` (the command the pane started with; it stays set after the command exits) and uses its basename, falling back to the config file only when that field is null. Alternative: `ZIDE_HARNESS` in every pane's env - rejected because Zellij 0.45.1 layouts reject a per-pane `env` node, and wrapping the shell in `env` makes it a command pane. zide never creates directories or git worktrees.
 
-### One generic skill, thin adapters
-- `assets/skill/zide/SKILL.md`: when to use zide (`$ZELLIJ` set and `zide` on PATH), `open`/`reload`/`tour`, the tour format with an example, and the reload warning.
-- `zide install skill <claude|codex>`: writes to `~/.claude/skills/zide/` or `~/.agents/skills/zide/`. omp reads `.claude` skills, so `claude` covers omp. 7.2 result: the codex docs (developers.openai.com/codex/skills, now learn.chatgpt.com/docs/build-skills) give `$HOME/.agents/skills` as the USER scope. codex-cli 0.164.0 also still scans `$CODEX_HOME/skills` (`~/.codex/skills`; strings `codex-home-skills` and `user-agent-skills` in the binary), but only `~/.agents/skills` is documented.
-- Claude Code adapter: a `PostToolUse` hook (matcher `Edit|Write|MultiEdit|NotebookEdit`) running `zide reload --quiet`. The Claude Code tools reference lists `Edit`, `Write`, and `NotebookEdit` as the file-editing tools; `MultiEdit` is no longer listed and stays in the matcher for older versions. `--quiet` exits zero with no output when not in a zide workstream, so the hook never fails an edit.
-- omp adapter: `assets/omp/zide-reload.ts`, a `tool_result` handler that runs `zide reload --quiet` after a successful `edit`, `write`, or `resolve`. Install steps for both adapters are in the README; zide does not edit harness settings files.
+### One generic skill, thin adapters, guided install
+- `assets/claude-plugin/skills/zide/SKILL.md` is the only copy of the skill: when to use zide (`$ZELLIJ` set and `zide` on PATH), `open`/`reload`/`tour`, the tour format with an example, and the reload warning.
+- Layout:
+  ```
+  .claude-plugin/marketplace.json   repo marketplace, source ./assets/claude-plugin
+  assets/claude-plugin/
+    .claude-plugin/plugin.json
+    skills/zide/SKILL.md
+    hooks/hooks.json
+  assets/omp/zide-reload.ts
+  ```
+- Codex skill directory, 7.2 result: the codex docs (developers.openai.com/codex/skills, now learn.chatgpt.com/docs/build-skills) give `$HOME/.agents/skills` as the USER scope. codex-cli 0.164.0 also still scans `$CODEX_HOME/skills` (`~/.codex/skills`; strings `codex-home-skills` and `user-agent-skills` in the binary), but only `~/.agents/skills` is documented.
+- Claude Code adapter: the plugin's `PostToolUse` hook (matcher `Edit|Write|MultiEdit|NotebookEdit`) running `zide reload --quiet`. The Claude Code tools reference lists `Edit`, `Write`, and `NotebookEdit` as the file-editing tools; `MultiEdit` is no longer listed and stays in the matcher for older versions. `--quiet` exits zero with no output when not in a zide workstream, so the hook never fails an edit.
+- omp adapter: `assets/omp/zide-reload.ts`, a `tool_result` handler that runs `zide reload --quiet` after a successful `edit`, `write`, or `resolve`.
+- `zide install`: a bubbletea checklist when no harness is named on a terminal, else the named harnesses. It plans every write and command first, and acts only when the whole plan is valid.
+  - claude: write the plugin to `$XDG_DATA_HOME/zide/claude-plugin/`, then `claude plugin marketplace add|update` and `claude plugin install|update zide@zide --scope user`. zide writes `0.0.0-<hash of the plugin files>` as the version in `plugin.json`, because Claude Code caches a plugin by version (zide has no build version). The repo `plugin.json` has no version, so the repo marketplace uses the git commit. Alternative: the user edits `settings.json` by hand - rejected, because a plugin installs and updates the hook and skill as one unit, and zide never merges JSON into a file the user owns.
+  - codex, omp: the skill goes to `~/.agents/skills/zide/` (omp reads it too); omp also gets the extension.
+  - The repo is also a marketplace for users who install without zide. Both use the name `zide`; if the registered source is not zide's directory, zide stops instead of replacing it.
 
 ## Risks / Trade-offs
 
 - [Key injection depends on Helix keymap defaults] -> Use only `Esc`, `:` command line, and `Enter`; integration test catches regressions.
 - [`zide reload` discards unsaved edits] -> Documented in three places; hook reloads only after harness edits, which the user started.
 - [`--stacked` placement differs from expectation] -> Task 5.4 checks it in a real session before the tour work builds on it; fallback is `new-pane --direction down` from the shell pane.
-- [omp has no after-edit event] -> Task 7.4 checks the omp extension API first; if no event exists, omp relies on the skill and the README says so.
+- [`claude plugin` CLI flags change] -> zide only uses `marketplace add|update|list` and `install|update`; task 7.9 runs them against a real Claude Code.
 - [`list-panes` JSON shape changes between Zellij versions] -> Fixture from 0.45.1; zide checks the Zellij version at launch and warns below 0.45.
 
 ## Open Questions

@@ -1,0 +1,14 @@
+{
+  "name": "zide",
+  "description": "zide for Claude Code",
+  "owner": {
+    "name": "Thane Thomson"
+  },
+  "plugins": [
+    {
+      "name": "zide",
+      "source": "./assets/claude-plugin",
+      "description": "Use zide from Claude Code: the zide skill, and an editor reload after each file edit."
+    }
+  ]
+}

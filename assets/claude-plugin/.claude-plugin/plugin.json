@@ -1,0 +1,8 @@
+{
+  "name": "zide",
+  "description": "Use zide from Claude Code: the zide skill, and an editor reload after each file edit.",
+  "author": {
+    "name": "Thane Thomson"
+  },
+  "repository": "https://github.com/relevatist/zide"
+}

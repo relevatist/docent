@@ -2,6 +2,7 @@ package assets
 
 import (
 	"encoding/json"
+	"io/fs"
 	"os"
 	"regexp"
 	"strings"
@@ -61,7 +62,7 @@ func TestClaudeHooks(t *testing.T) {
 			} `json:"hooks"`
 		} `json:"hooks"`
 	}
-	data, err := os.ReadFile("claude/hooks.json")
+	data, err := os.ReadFile("claude-plugin/hooks/hooks.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,5 +84,13 @@ func TestClaudeHooks(t *testing.T) {
 	}
 	if h := groups[0].Hooks[0]; h.Type != "command" || h.Command != "zide reload --quiet" {
 		t.Errorf("hook = %+v", h)
+	}
+}
+
+func TestClaudePluginFiles(t *testing.T) {
+	for _, name := range []string{".claude-plugin/plugin.json", "hooks/hooks.json", "skills/zide/SKILL.md"} {
+		if _, err := fs.Stat(ClaudePlugin, name); err != nil {
+			t.Error(err)
+		}
 	}
 }

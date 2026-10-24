@@ -22,7 +22,7 @@ var commands = map[string]command{
 	"tour":      {runTour, "tour <file|->\tstart a guided tour of a change"},
 	"tour-view": {runTourView, "tour-view <file>\trun the tour pane (internal)"},
 	"diff":      {runDiff, "diff [git diff args]\twalk through git diff hunks"},
-	"install":   {runInstall, "install skill <claude|codex>\tinstall the agent skill"},
+	"install":   {runInstall, "install [claude|codex|omp]... [--force]\tinstall zide for coding harnesses"},
 }
 
 func usage(w io.Writer) error {

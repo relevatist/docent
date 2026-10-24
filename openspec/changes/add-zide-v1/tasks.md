@@ -45,9 +45,14 @@
 
 - [x] 7.1 Write `assets/skill/zide/SKILL.md`: when to use zide (`$ZELLIJ` set, `zide` on PATH), `open`/`reload`/`tour` usage, tour format with example, reload warning; verify a test checks the file has valid frontmatter (`name`, `description`) and no harness-specific steps
 - [x] 7.2 Confirm the codex user skill directory (`~/.codex/skills` vs `~/.agents/skills`), then implement `zide install skill <claude|codex> [--force]`: prints paths, refuses to overwrite a changed file without `--force`; verify tests against a temp `$HOME`
-- [ ] 7.3 Add `assets/claude/hooks.json` (`PostToolUse`, matcher `Edit|Write|MultiEdit`, command `zide reload --quiet`); verify in a workstream that a Claude Code edit reloads the editor, and that the hook exits zero outside Zellij
+- [x] 7.3 Move the skill to `assets/claude-plugin/skills/zide/SKILL.md` and the hook to `assets/claude-plugin/hooks/hooks.json`; add `plugin.json` and the root `.claude-plugin/marketplace.json`; embed the plugin directory; verify `claude plugin validate` passes for the plugin and the marketplace and the 7.1 test reads the new path
 - [ ] 7.4 Check the omp extension API for an after-edit or tool-result event; if present, add `assets/omp/zide-reload.ts` running `zide reload --quiet` and verify an omp edit reloads the editor; if absent, record that in design.md and the README
 - [x] 7.5 Write README: install, `zide [dir]`, Helix keys, skill install, adapter install steps for Claude Code and omp, reload warning; verify every command in the README runs as written
+- [x] 7.6 Write failing tests for `zide install` against a temp `$HOME`/`$XDG_DATA_HOME` and a fake `claude` on `PATH` that records argv: names form; unknown harness and no-terminal exit 2; missing command and changed file write nothing for any harness; codex/omp paths; claude add vs update; marketplace from another source; legacy skill removed or kept
+- [x] 7.7 Implement `zide install <harness>... [--force]` and remove `install skill`; verify 7.6 tests pass
+- [x] 7.8 Implement the bubbletea checklist (checked when on `PATH`, space toggles, enter confirms, esc/q cancels); verify model tests for toggle, confirm, and cancel
+- [ ] 7.9 In a real workstream, run `zide install` and select Claude Code: verify `claude plugin list` shows `zide@zide`, a Claude Code edit reloads the editor, the hook exits zero outside Zellij, and rerunning updates the plugin; then verify `claude plugin marketplace add` of the repo installs the same plugin
+- [x] 7.10 Update the README install section for `zide install`; verify every install command in the README runs as written
 
 ## 8. Integration
 

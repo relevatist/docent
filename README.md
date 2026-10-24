@@ -97,33 +97,27 @@ Keys in the tour pane:
 
 ## Harness setup
 
-### Agent skill
-
-The skill tells the harness how to use `zide open`, `zide reload`, `zide tour`, and `zide diff`.
-
 ```sh
-zide install skill claude          # ~/.claude/skills/zide/SKILL.md (oh-my-pi reads it too)
-zide install skill codex           # ~/.agents/skills/zide/SKILL.md
-zide install skill claude codex --force   # overwrite a changed skill file
+zide install                 # choose harnesses from a checklist
+zide install claude omp      # or name them
+zide install codex --force   # overwrite a skill or extension file that you changed
 ```
 
-Without `--force`, zide does not overwrite a skill file that you changed. It prints the path and exits non-zero.
+| Harness | What zide installs |
+|---------|--------------------|
+| `claude` | The `zide@zide` Claude Code plugin: the agent skill and a reload hook. zide writes it to `~/.local/share/zide/claude-plugin/` (or `$XDG_DATA_HOME/zide/claude-plugin/`) and installs it with the `claude plugin` CLI. Restart Claude Code after the install. |
+| `codex` | The agent skill: `~/.agents/skills/zide/SKILL.md` |
+| `omp` | The agent skill (same path as codex; oh-my-pi reads it) and a reload extension: `~/.omp/agent/extensions/zide-reload.ts` |
 
-### Reload after edits
+The checklist starts with a harness checked when its command is on `PATH`. zide checks everything before it changes anything: if a harness command is missing, or a file has changes and you did not give `--force`, it installs nothing and exits non-zero. Run `zide install` again after you upgrade zide.
 
-An adapter runs `zide reload --quiet` each time the harness edits a file, so the editor shows the new content. Outside a workstream, `zide reload --quiet` does nothing and exits zero, so the adapter never fails an edit. Harnesses without an adapter (for example codex) rely on the skill, which tells them to run `zide reload`.
+The agent skill tells the harness how to use `zide open`, `zide reload`, `zide tour`, and `zide diff`. The reload hook and extension run `zide reload --quiet` each time the harness edits a file, so the editor shows the new content. Outside a workstream, `zide reload --quiet` does nothing and exits zero, so it never fails an edit. codex has no reload adapter; the skill tells it to run `zide reload`.
 
-Claude Code: add the `hooks` block from [`assets/claude/hooks.json`](assets/claude/hooks.json) to `~/.claude/settings.json` (or to a project's `.claude/settings.json`). If you have other `PostToolUse` hooks, add the entry to that list. To try it for one session:
-
-```sh
-claude --settings assets/claude/hooks.json
-```
-
-oh-my-pi: copy the extension into the user extension directory:
+To install the Claude Code plugin without the zide installer:
 
 ```sh
-mkdir -p ~/.omp/agent/extensions
-cp assets/omp/zide-reload.ts ~/.omp/agent/extensions/
+claude plugin marketplace add relevatist/zide
+claude plugin install zide@zide
 ```
 
-To try it for one session: `omp -e assets/omp/zide-reload.ts`. The extension reloads after the `edit`, `write`, and `resolve` tools.
+To try the oh-my-pi extension for one session: `omp -e assets/omp/zide-reload.ts`. The extension reloads after the `edit`, `write`, and `resolve` tools.

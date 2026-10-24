@@ -12,7 +12,7 @@ AI coding harnesses make code changes faster than people can understand them. Ed
 - `zide open` and `zide reload` let the harness (and the tour) move the editor to a file and line, and reload changed files.
 - `zide tour` opens a guided walk-through of a change, one step at a time. The editor follows each step. Hunks the tour does not cover are shown at the end.
 - `zide diff` opens the same walk-through in plain `git diff` order, with no notes.
-- A generic agent skill (`SKILL.md`) tells any harness how to use zide and how to write a tour. Claude Code and oh-my-pi get an adapter that reloads the editor after each file edit.
+- A generic agent skill (`SKILL.md`) tells any harness how to use zide and how to write a tour. Claude Code and oh-my-pi get an adapter that reloads the editor after each file edit. `zide install` installs for the harnesses the user checks; for Claude Code it installs a plugin with the skill and the hook.
 - v1 supports Helix only. Neovim and Kakoune are out of scope.
 
 ## Capabilities
@@ -33,4 +33,4 @@ None.
 
 - New Go module and `zide` binary. New dependencies: a TUI library for the tour pane, a TOML parser for config.
 - Runtime dependencies: Zellij 0.45+ (for `--pane-id` and `list-panes --json`), Helix 25.07+, git.
-- Adds files to user config only on explicit install: Helix keybindings, the agent skill, and harness hooks.
+- Adds files to user config only on explicit install: Helix keybindings, the agent skill, and the omp extension. Registers the Claude Code plugin through the `claude` CLI.

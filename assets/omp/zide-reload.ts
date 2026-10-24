@@ -1,5 +1,5 @@
 // oh-my-pi extension: reload the zide editor after omp writes files.
-// Install: cp zide-reload.ts ~/.omp/agent/extensions/
+// Install: zide install omp
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 
 // `resolve` applies changes that `ast_edit` previews.

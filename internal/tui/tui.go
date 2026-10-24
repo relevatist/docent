@@ -1,4 +1,4 @@
-// Package tui shows a tour step model in the terminal.
+// Package tui holds the terminal views: the tour pane and the install checklist.
 package tui
 
 import (
