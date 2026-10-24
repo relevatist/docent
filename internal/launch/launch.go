@@ -26,7 +26,7 @@ const layout = `layout {
     }
     tab {
         pane split_direction="vertical" {
-            pane name="editor" command="hx" size="65%%" focus=true
+            pane name="editor" command="hx" size="60%%" focus=true
             pane split_direction="horizontal" {
                 pane name="harness" command=%s%s
                 pane name="shell"

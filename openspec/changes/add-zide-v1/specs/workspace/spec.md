@@ -26,7 +26,7 @@ Opens one workstream as one Zellij tab with editor, harness, and shell panes, an
 - **THEN** zide prints an error naming the directory and exits non-zero without opening a tab
 
 ### Requirement: Editor primacy in the layout
-The layout SHALL place the editor on the left at about 65% width, with the harness above the shell on the right. The harness and shell panes SHALL stay visible while the editor is in use.
+The layout SHALL place the editor on the left at about 60% width, with the harness above the shell on the right. The harness and shell panes SHALL stay visible while the editor is in use.
 
 #### Scenario: Default layout
 - **WHEN** a workstream tab opens

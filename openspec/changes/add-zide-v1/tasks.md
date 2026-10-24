@@ -26,7 +26,7 @@
 ## 5. Workspace launch
 
 - [x] 5.1 Write failing tests for config loading: default `harness = "claude"`, `focus_on_send = true`; file overrides; `--harness` overrides file
-- [x] 5.2 Write failing tests for layout rendering: KDL contains panes `editor` (65%, `hx`, focused), `harness` (configured command), `shell`, in the agreed arrangement
+- [x] 5.2 Write failing tests for layout rendering: KDL contains panes `editor` (60%, `hx`, focused), `harness` (configured command), `shell`, in the agreed arrangement
 - [x] 5.3 Implement `zide [dir]`: inside Zellij `new-tab --layout-string --name --cwd`; outside `zellij --session --layout-string`; missing dir errors before launch; warn when Zellij is below 0.45; verify 5.1/5.2 tests pass and fake-runner tests cover both launch paths
 - [x] 5.5 Add `--name <name>` to launch (tab or session name; default dir basename); verify fake-runner tests assert `--name` on `new-tab` and the session name outside Zellij
 - [x] 5.6 Make `zide send` take the harness from the harness pane's `terminal_command` in `list-panes --all --json`, over the config file; verify tests that `send` in a tab launched with `--harness omp` formats refs for `omp` while the config says `claude`

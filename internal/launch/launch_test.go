@@ -19,7 +19,7 @@ func TestLayout(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		`pane name="editor" command="hx" size="65%" focus=true`,
+		`pane name="editor" command="hx" size="60%" focus=true`,
 		`pane name="harness" command="omp"`,
 		`args "--model" "\"x\""`,
 		`pane name="shell"`,
