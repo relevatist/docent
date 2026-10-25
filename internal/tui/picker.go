@@ -338,28 +338,37 @@ func (p *picker) result() (Picked, bool) {
 }
 
 // filter returns the dirs whose display path (see tilde) holds the runes of q
-// in order, ignoring case. When none match and q is a path to a directory, it
-// returns that directory alone.
+// in order, ignoring case. When q is a path to a directory, that directory
+// comes first, once.
 func filter(dirs []string, q, home string) []string {
 	var out []string
+	typed, ok := typedDir(q, home)
+	if ok {
+		out = append(out, typed)
+	}
 	for _, d := range dirs {
-		if subsequence(strings.ToLower(tilde(d, home)), strings.ToLower(q)) {
+		if (!ok || d != typed) && subsequence(strings.ToLower(tilde(d, home)), strings.ToLower(q)) {
 			out = append(out, d)
 		}
 	}
-	if len(out) > 0 || q == "" {
-		return out
+	return out
+}
+
+// typedDir returns q as an absolute path when it is a directory. A leading ~
+// means home, and a relative path is relative to the current directory.
+func typedDir(q, home string) (string, bool) {
+	if q == "" {
+		return "", false
 	}
-	p := q
-	if p == "~" || strings.HasPrefix(p, "~/") {
-		p = filepath.Join(home, p[1:])
+	if q == "~" || strings.HasPrefix(q, "~/") {
+		q = filepath.Join(home, q[1:])
 	}
-	if p, err := filepath.Abs(p); err == nil {
-		if fi, err := os.Stat(p); err == nil && fi.IsDir() {
-			return []string{p}
-		}
+	q, err := filepath.Abs(q)
+	if err != nil {
+		return "", false
 	}
-	return nil
+	fi, err := os.Stat(q)
+	return q, err == nil && fi.IsDir()
 }
 
 func subsequence(s, q string) bool {

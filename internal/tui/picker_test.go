@@ -13,12 +13,14 @@ import (
 
 func TestFilter(t *testing.T) {
 	home := t.TempDir()
-	x := filepath.Join(home, "x")
-	if err := os.Mkdir(x, 0o755); err != nil {
-		t.Fatal(err)
+	retry, lib, x := filepath.Join(home, "wt/retry/app"), filepath.Join(home, "src/lib"), filepath.Join(home, "x")
+	for _, d := range []string{lib, x} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
 	}
-	retry, lib := filepath.Join(home, "wt/retry/app"), filepath.Join(home, "src/lib")
-	dirs := []string{retry, lib, "/opt/RTAP"}
+	src := filepath.Dir(lib)
+	dirs := []string{retry, lib, "/opt/RTAP", x}
 	tests := []struct {
 		q    string
 		want []string
@@ -27,17 +29,29 @@ func TestFilter(t *testing.T) {
 		{"rtap", []string{retry, "/opt/RTAP"}},
 		{"RtaP", []string{retry, "/opt/RTAP"}},
 		{"~/s", []string{lib}},
-		{"~", []string{retry, lib}},
+		{"~/src", []string{src, lib}},
+		{"~", []string{home, retry, lib, x}},
 		{"pat", nil},
 		{"~/x", []string{x}},
 		{"~/x/", []string{x}},
 		{home, []string{home}},
+		{lib, []string{lib}},
 		{"~/missing", nil},
 	}
 	for _, tt := range tests {
 		if got := filter(dirs, tt.q, home); !slices.Equal(got, tt.want) {
 			t.Errorf("filter(%q) = %q; want %q", tt.q, got, tt.want)
 		}
+	}
+}
+
+func TestFilterRelative(t *testing.T) {
+	cwd := t.TempDir()
+	t.Chdir(cwd)
+	app := mkdirs(t, cwd, "app")[0]
+	other := "/opt/app"
+	if got, want := filter([]string{other, app}, "app", ""), []string{app, other}; !slices.Equal(got, want) {
+		t.Errorf("filter = %q; want %q", got, want)
 	}
 }
 
