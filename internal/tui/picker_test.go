@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 )
@@ -144,9 +145,49 @@ func TestPickerWalk(t *testing.T) {
 	if got := p.matches(); !slices.Equal(got, dirs) {
 		t.Fatalf("before walk: %q", got)
 	}
-	p.Update(cmd())
-	if got, want := p.matches(), append(dirs, filepath.Dir(repo)); !slices.Equal(got, want) {
-		t.Errorf("after walk: %q; want %q", got, want)
+	for cmd != nil {
+		_, cmd = p.Update(cmd())
+	}
+	if got, want := p.matches(), append(dirs, filepath.Dir(repo)); !slices.Equal(got, want) || p.walking {
+		t.Errorf("after walk: %q, walking %v; want %q", got, p.walking, want)
+	}
+}
+
+func TestPickerWhileWalking(t *testing.T) {
+	p, dirs := newPicker(t, PickerInput{Harness: "claude", Roots: []string{"unused"}})
+	hits := make(chan string, 2)
+	p.hits = hits
+	hits <- dirs[0]
+	hits <- "/opt/app"
+	_, cmd := p.Update(p.next())
+	if got, want := p.matches(), append(dirs, "/opt/app"); !slices.Equal(got, want) || !p.walking || cmd == nil {
+		t.Fatalf("while walking: %q, walking %v; want %q", got, p.walking, want)
+	}
+	if !strings.Contains(p.View().Content, "searching roots") {
+		t.Errorf("no walking indicator:\n%s", p.View().Content)
+	}
+	close(hits)
+	if p.Update(cmd()); p.walking {
+		t.Error("walking after the walk ended")
+	}
+}
+
+func TestPickerStopWalk(t *testing.T) {
+	root := t.TempDir()
+	mkdirs(t, root, "a/.git", "b/.git", "c/.git")
+	p, _ := newPicker(t, PickerInput{Harness: "claude", Roots: []string{root}})
+	p.Init()
+	<-p.hits
+	time.Sleep(50 * time.Millisecond) // let the walk block on the next hit
+	stopped := make(chan struct{})
+	go func() {
+		p.stop()
+		close(stopped)
+	}()
+	select {
+	case <-stopped:
+	case <-time.After(5 * time.Second):
+		t.Fatal("walk did not stop")
 	}
 }
 

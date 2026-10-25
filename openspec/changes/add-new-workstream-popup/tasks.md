@@ -45,7 +45,7 @@
 
 ## 8. Unlimited walk and typed path
 
-- [ ] 8.1 Write failing tests: a repo 5 levels down is a hit; the walk stops when its context is done; the picker shows a batch of hits before the walk ends; stopping the picker ends the walk goroutine. Remove the depth limit, stream hits in batches, and stop the walk when the picker exits; verify the tests pass
+- [x] 8.1 Write failing tests: a repo 5 levels down is a hit; the walk stops when its context is done; the picker shows a batch of hits before the walk ends; stopping the picker ends the walk goroutine. Remove the depth limit, stream hits in batches, and stop the walk when the picker exits; verify the tests pass
 - [ ] 8.2 Write failing tests for the filter: a typed path to an existing directory comes first, also when other directories match, and shows once. Implement it and verify the tests pass
 
 ## Workflow follow-up

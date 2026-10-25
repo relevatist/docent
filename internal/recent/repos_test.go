@@ -1,6 +1,7 @@
 package recent
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"slices"
@@ -39,7 +40,7 @@ func TestRepos(t *testing.T) {
 		"notes/readme",
 	)
 	tree(t, wt, "retry/app/.git")
-	got := Repos([]string{src, filepath.Join(src, "missing"), wt})
+	got := slices.Collect(Repos(t.Context(), []string{src, filepath.Join(src, "missing"), wt}))
 	want := []string{
 		filepath.Join(src, "a/b/c"),
 		filepath.Join(src, "app"),
@@ -51,11 +52,34 @@ func TestRepos(t *testing.T) {
 	}
 }
 
-func TestReposTooDeep(t *testing.T) {
+func TestReposDeep(t *testing.T) {
 	src := t.TempDir()
-	tree(t, src, "a/b/c/d/.git/")
-	if got := Repos([]string{src}); len(got) != 0 {
-		t.Errorf("Repos = %q; want none", got)
+	tree(t, src, "a/b/c/d/e/.git/")
+	if got, want := slices.Collect(Repos(t.Context(), []string{src})), []string{filepath.Join(src, "a/b/c/d/e")}; !slices.Equal(got, want) {
+		t.Errorf("Repos = %q; want %q", got, want)
+	}
+}
+
+func TestReposCancel(t *testing.T) {
+	src := t.TempDir()
+	tree(t, src, "a/.git/", "b/.git/", "c/.git/")
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	var got []string
+	for d := range Repos(ctx, []string{src, src}) {
+		got = append(got, d)
+		cancel()
+	}
+	if want := []string{filepath.Join(src, "a")}; !slices.Equal(got, want) {
+		t.Errorf("Repos after cancel = %q; want %q", got, want)
+	}
+}
+
+func TestReposBreak(t *testing.T) {
+	src := t.TempDir()
+	tree(t, src, "a/.git/", "b/.git/")
+	for range Repos(t.Context(), []string{src, src}) {
+		break
 	}
 }
 
@@ -80,7 +104,7 @@ func TestReposSymlinkRoot(t *testing.T) {
 	if err := os.Symlink(filepath.Join(real, "app"), filepath.Join(real, "lib", "app")); err != nil {
 		t.Fatal(err)
 	}
-	if got, want := Repos([]string{link}), []string{filepath.Join(link, "app")}; !slices.Equal(got, want) {
+	if got, want := slices.Collect(Repos(t.Context(), []string{link})), []string{filepath.Join(link, "app")}; !slices.Equal(got, want) {
 		t.Errorf("Repos = %q; want %q", got, want)
 	}
 }

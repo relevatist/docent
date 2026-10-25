@@ -2,10 +2,12 @@ package tui
 
 import (
 	"cmp"
+	"context"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
@@ -48,6 +50,7 @@ type Picked struct {
 // PickWorkstream shows the picker. ok is false when the user cancels.
 func PickWorkstream(in PickerInput) (Picked, bool, error) {
 	p := newPickerModel(in)
+	defer p.stop()
 	if _, err := tea.NewProgram(p).Run(); err != nil {
 		return Picked{}, false, err
 	}
@@ -55,7 +58,11 @@ func PickWorkstream(in PickerInput) (Picked, bool, error) {
 	return picked, ok, nil
 }
 
-type reposMsg []string
+// reposMsg is a batch of walk hits. done marks the end of the walk.
+type reposMsg struct {
+	dirs []string
+	done bool
+}
 
 type picker struct {
 	in             PickerInput
@@ -71,6 +78,8 @@ type picker struct {
 	picked         Picked
 	done           bool
 	height         int
+	hits           <-chan string
+	stop           func() // ends the walk and waits for it
 }
 
 func newPickerModel(in PickerInput) *picker {
@@ -81,6 +90,7 @@ func newPickerModel(in PickerInput) *picker {
 		dirs:    recent.Candidates(in.Recent, nil),
 		walking: len(in.Roots) > 0,
 		harness: in.Harness,
+		stop:    func() {},
 	}
 }
 
@@ -88,7 +98,48 @@ func (p *picker) Init() tea.Cmd {
 	if !p.walking {
 		return nil
 	}
-	return func() tea.Msg { return reposMsg(recent.Repos(p.in.Roots)) }
+	ctx, cancel := context.WithCancel(context.Background())
+	hits, walked := make(chan string), make(chan struct{})
+	go func() {
+		defer close(walked)
+		defer close(hits)
+		for d := range recent.Repos(ctx, p.in.Roots) {
+			select {
+			case hits <- d:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	p.hits = hits
+	p.stop = func() {
+		cancel()
+		<-walked
+	}
+	return p.next
+}
+
+// next returns the next batch of hits: up to 100, or those that come in 50ms
+// after the first.
+func (p *picker) next() tea.Msg {
+	d, ok := <-p.hits
+	if !ok {
+		return reposMsg{done: true}
+	}
+	batch := []string{d}
+	timeout := time.After(50 * time.Millisecond)
+	for len(batch) < 100 {
+		select {
+		case d, ok := <-p.hits:
+			if !ok {
+				return reposMsg{batch, true}
+			}
+			batch = append(batch, d)
+		case <-timeout:
+			return reposMsg{dirs: batch}
+		}
+	}
+	return reposMsg{dirs: batch}
 }
 
 func (p *picker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -96,7 +147,16 @@ func (p *picker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		p.height = msg.Height
 	case reposMsg:
-		p.dirs, p.walking = recent.Candidates(p.dirs, msg), false
+		for _, d := range msg.dirs {
+			if !slices.Contains(p.dirs, d) {
+				p.dirs = append(p.dirs, d)
+			}
+		}
+		if msg.done {
+			p.walking = false
+			return p, nil
+		}
+		return p, p.next
 	case tea.PasteMsg:
 		if p.openTab == "" {
 			text := strings.NewReplacer("\r", "", "\n", "").Replace(msg.Content)
