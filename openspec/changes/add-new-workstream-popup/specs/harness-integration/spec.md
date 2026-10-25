@@ -88,6 +88,10 @@ For `zellij`, zide SHALL add the `Alt w` bind from `assets/zellij/keys.kdl` to t
 - **WHEN** the config has more than one begin or end marker, or the end marker is before the begin marker
 - **THEN** zide names the file, tells the user to fix it by hand, writes nothing, and exits non-zero; markers in a `/* */` comment do not count, and when only such markers exist zide tells the user to add the snippet by hand
 
+#### Scenario: Begin marker without an end marker
+- **WHEN** the config has a `// zide: begin` line without a `// zide: end` line, or the reverse
+- **THEN** zide names the file, says which marker is missing, tells the user to fix the file by hand, writes nothing, and exits non-zero
+
 #### Scenario: Rerun with the same content
 - **WHEN** the marked node matches the shipped one
 - **THEN** zide does not change the file
@@ -101,7 +105,7 @@ For `zellij`, zide SHALL add the `Alt w` bind from `assets/zellij/keys.kdl` to t
 - **THEN** zide names the file and the bind, writes nothing, and exits non-zero; when the bind is the snippet from `assets/zellij/keys.kdl`, zide says that it was added by hand and tells the user to remove it so that zide can manage it
 
 ### Requirement: Safe Zellij config write
-Before it writes, zide SHALL run `zellij --config <new file> setup --check` on the new content and refuse if it fails, and SHALL refuse if it cannot make a file in the config directory. When it changes an existing file, zide SHALL keep the old file as `config.kdl.zide.bak` next to it unless that file exists, write through a temp file and rename, and keep the file mode. A new config file SHALL get mode `0644`. When the config is a symlink, zide SHALL change the file that the symlink points to.
+Before it writes, zide SHALL run `zellij --config <new file> setup --check` on the new content and refuse if it fails, and SHALL refuse if it cannot make a file in the config directory. When it changes an existing file, zide SHALL keep the old file as `config.kdl.zide.bak` next to it unless that file exists, write through a temp file and rename, and keep the file mode. A new config file SHALL get mode `0644`. zide SHALL change the target of a symlinked config and refuse a hard-linked one.
 
 #### Scenario: Config check fails
 - **WHEN** `zellij setup --check` fails on the new content
@@ -114,6 +118,14 @@ Before it writes, zide SHALL run `zellij --config <new file> setup --check` on t
 #### Scenario: Backup kept
 - **WHEN** zide changes the config and `config.kdl.zide.bak` exists
 - **THEN** zide does not change `config.kdl.zide.bak`, because it holds the config from before zide, and says that it kept it
+
+#### Scenario: Backup write fails
+- **WHEN** zide cannot write all of the backup
+- **THEN** zide leaves no `config.kdl.zide.bak`, does not change the config, and exits non-zero
+
+#### Scenario: Hard-linked config
+- **WHEN** the config file has other hard links
+- **THEN** zide names the file, tells the user to add the key by hand or to replace the hard link with a symlink, writes nothing, and exits non-zero
 
 #### Scenario: Config directory not writable
 - **WHEN** the user runs `zide install codex zellij` and zide cannot make a file in the directory of the Zellij config (for example a symlink into a read-only directory)
