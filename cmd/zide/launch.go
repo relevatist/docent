@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"flag"
 	"fmt"
 	"io"
@@ -27,7 +28,7 @@ func runLaunch(args []string) int {
 		fs.Usage()
 		return 2
 	}
-	err := launchDir(zellij.Exec{}, attach, os.Stderr, fs.Arg(0), *name, *harness)
+	err := launchDir(zellij.Exec{}, attach, os.Stderr, fs.Arg(0), *name, *harness, "")
 	if err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "zide:", err)
 		return 1
@@ -37,8 +38,8 @@ func runLaunch(args []string) int {
 
 // launchDir opens the workstream for arg and records it as recent: before
 // attach outside Zellij, as attach blocks until the user detaches, and after
-// the new tab inside Zellij.
-func launchDir(r zellij.Runner, attach launch.Attach, w io.Writer, arg, name, harness string) error {
+// the new tab inside Zellij. A non-empty kind replaces the harness kind.
+func launchDir(r zellij.Runner, attach launch.Attach, w io.Writer, arg, name, harness, kind string) error {
 	dir, err := filepath.Abs(arg)
 	if err != nil {
 		return err
@@ -51,6 +52,7 @@ func launchDir(r zellij.Runner, attach launch.Attach, w io.Writer, arg, name, ha
 	if err != nil {
 		return err
 	}
+	h.Kind = cmp.Or(kind, h.Kind)
 	record := func() error {
 		if err := recent.Add(dir); err != nil {
 			_, err = fmt.Fprintln(w, "zide: warning:", err)

@@ -41,7 +41,7 @@ func launchInZellij(t *testing.T, cfg, harness string, w io.Writer) string {
 	}
 	t.Setenv("ZELLIJ", "0")
 	f := &zellij.Fake{Out: map[string]string{"--version": "zellij 0.45.1"}}
-	if err := launchDir(f, nil, w, t.TempDir(), "", harness); err != nil {
+	if err := launchDir(f, nil, w, t.TempDir(), "", harness, ""); err != nil {
 		t.Fatal(err)
 	}
 	last := f.Calls[len(f.Calls)-1]
@@ -72,7 +72,7 @@ func TestLaunchRecordsRecent(t *testing.T) {
 	dir := t.TempDir()
 	f := &zellij.Fake{Out: map[string]string{"--version": "zellij 0.45.1"}}
 	var w bytes.Buffer
-	if err := launchDir(f, nil, &w, dir, "", "cat"); err != nil {
+	if err := launchDir(f, nil, &w, dir, "", "cat", ""); err != nil {
 		t.Fatal(err)
 	}
 	if dirs, err := recent.Load(); err != nil || !slices.Equal(dirs, []string{dir}) {
@@ -111,7 +111,7 @@ func TestLaunchRecordsBeforeAttach(t *testing.T) {
 		}
 		return nil
 	}
-	if err := launchDir(f, attach, io.Discard, dir, "", "cat"); err != nil {
+	if err := launchDir(f, attach, io.Discard, dir, "", "cat", ""); err != nil {
 		t.Fatal(err)
 	}
 	if attached != 1 {

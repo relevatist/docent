@@ -155,3 +155,25 @@ func TestNewHelp(t *testing.T) {
 		t.Errorf("extra arg: exit %d; want 2", code)
 	}
 }
+
+func TestNewKeepsKind(t *testing.T) {
+	for _, tt := range []struct{ picked, want string }{
+		{"wrap omp", `"/usr/bin/env" {` + "\n" + `                    args "ZIDE_HARNESS_KIND=omp" "wrap" "omp"`},
+		{"wrap omp --x", `"wrap" {` + "\n" + `                    args "omp" "--x"`},
+	} {
+		dir, _ := appDir(t)
+		f := newFake(t, sandboxCfg, "/other", "/usr/bin/env ZIDE_HARNESS_KIND=omp wrap omp")
+		pick := func(in tui.PickerInput) (tui.Picked, bool, error) {
+			if in.Harness != "wrap omp" {
+				t.Errorf("picker harness %q; want wrap omp", in.Harness)
+			}
+			return tui.Picked{Dir: dir, Harness: tt.picked}, true, nil
+		}
+		if code := newCmd(f, nil, os.Stderr, pick); code != 0 {
+			t.Fatalf("exit %d", code)
+		}
+		if tab := lastNewTab(t, f); !strings.Contains(tab[3], tt.want) {
+			t.Errorf("picked %q: layout\n%s\nwant %q", tt.picked, tab[3], tt.want)
+		}
+	}
+}

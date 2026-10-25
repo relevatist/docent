@@ -64,10 +64,11 @@ func newWorkstream(r zellij.Runner, w io.Writer, pick pickerFunc) error {
 	if err != nil {
 		return err
 	}
+	harness, kind := currentHarness(r, c)
 	p, ok, err := pick(tui.PickerInput{
 		Recent:  dirs,
 		Roots:   c.Roots,
-		Harness: currentHarness(r, c),
+		Harness: harness,
 		Aliases: slices.Collect(maps.Keys(c.Harnesses)),
 		IsOpen: func(dir string) (string, bool) {
 			t, ok := openTab(tabs, dir)
@@ -85,24 +86,28 @@ func newWorkstream(r zellij.Runner, w io.Writer, pick pickerFunc) error {
 	case tui.Another:
 		name = freeName(tabs, filepath.Base(p.Dir))
 	}
-	return launchDir(r, attach, w, p.Dir, name, p.Harness)
+	if p.Harness != harness {
+		kind = ""
+	}
+	return launchDir(r, attach, w, p.Dir, name, p.Harness, kind)
 }
 
 // currentHarness returns the harness of the caller's tab: an alias name when
-// the pane runs an alias command, else the command. Without one, it returns
-// the config harness.
-func currentHarness(r zellij.Runner, c config.Config) string {
+// the pane runs an alias command, else the command and its kind marker, if
+// any. Without one, it returns the config harness.
+func currentHarness(r zellij.Runner, c config.Config) (harness, kind string) {
 	p, err := panes.Lookup(r, "harness")
 	cmd := panes.Unwrap(p.Command)
 	if err != nil || cmd == "" {
-		return c.Harness
+		return c.Harness, ""
 	}
 	for _, name := range slices.Sorted(maps.Keys(c.Harnesses)) {
 		if strings.Join(strings.Fields(c.Harnesses[name].Command), " ") == cmd {
-			return name
+			return name, ""
 		}
 	}
-	return cmd
+	kind, _ = panes.Marker(p.Command)
+	return cmd, kind
 }
 
 // openTab returns the tab whose editor pane has dir as its working directory.
