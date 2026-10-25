@@ -17,3 +17,6 @@ var Skill string
 
 //go:embed omp/zide-reload.ts
 var OmpExtension string
+
+//go:embed zellij/keys.kdl
+var ZellijKeys string

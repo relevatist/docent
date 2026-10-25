@@ -27,6 +27,7 @@ var harnesses = []harness{
 	{"claude", "Claude Code", "plugin: skill + reload hook"},
 	{"codex", "Codex", "skill"},
 	{"omp", "oh-my-pi", "skill + reload extension"},
+	{"zellij", "Zellij", "Alt w key for zide new"},
 }
 
 // pickFunc asks the user which harnesses to install for. ok is false when
@@ -47,6 +48,11 @@ func pickHarnesses(found []bool) ([]string, bool, error) {
 	opts := make([]tui.Option, len(harnesses))
 	for i, h := range harnesses {
 		opts[i] = tui.Option{Label: h.label, Detail: h.detail, Checked: found[i]}
+		if home, err := os.UserHomeDir(); h.name == "zellij" && err == nil {
+			if path, err := zellijConfigPath(home); err == nil {
+				opts[i].Detail += " (" + path + ")"
+			}
+		}
 	}
 	picked, ok, err := tui.Pick("Install zide for:", opts)
 	var names []string
@@ -59,16 +65,17 @@ func pickHarnesses(found []bool) ([]string, bool, error) {
 func installCmd(args []string, out, w io.Writer, tty bool, pick pickFunc) int {
 	fs := flag.NewFlagSet("install", flag.ContinueOnError)
 	fs.SetOutput(w)
-	force := fs.Bool("force", false, "overwrite a changed skill or extension file")
+	force := fs.Bool("force", false, "overwrite a changed skill or extension file, or a changed zide key in the Zellij config")
 	var usageErr error
 	fs.Usage = func() {
-		_, usageErr = fmt.Fprintln(w, `Usage: zide install [claude|codex|omp]... [--force]
+		_, usageErr = fmt.Fprintln(w, `Usage: zide install [claude|codex|omp|zellij]... [--force]
 
 Install zide for each named harness. With no names on a terminal, choose
 from a checklist.
   claude  Claude Code plugin (skill + reload hook), through the claude CLI
   codex   ~/.agents/skills/zide/SKILL.md
-  omp     ~/.agents/skills/zide/SKILL.md, ~/.omp/agent/extensions/zide-reload.ts`)
+  omp     ~/.agents/skills/zide/SKILL.md, ~/.omp/agent/extensions/zide-reload.ts
+  zellij  Alt w key for zide new, in the Zellij config.kdl (old file kept as config.kdl.zide.bak)`)
 		fs.PrintDefaults()
 	}
 	var names []string
@@ -83,7 +90,7 @@ from a checklist.
 	}
 	for _, name := range names {
 		if !slices.ContainsFunc(harnesses, func(h harness) bool { return h.name == name }) {
-			_, _ = fmt.Fprintf(w, "zide install: unknown harness %q (want claude, codex, or omp)\n", name)
+			_, _ = fmt.Fprintf(w, "zide install: unknown harness %q (want claude, codex, omp, or zellij)\n", name)
 			return 2
 		}
 	}
@@ -137,6 +144,7 @@ type install struct {
 	pluginDir string // empty unless installing for claude
 	legacy    string // the skill path from before the Claude Code plugin
 	added     bool   // the zide marketplace is already registered from pluginDir
+	zellij    *zellijTarget
 }
 
 func newInstall(names []string, force bool) (*install, error) {
@@ -160,6 +168,8 @@ func newInstall(names []string, force bool) (*install, error) {
 		case "omp":
 			in.addFile(skill)
 			in.addFile(fileTarget{filepath.Join(home, ".omp/agent/extensions/zide-reload.ts"), assets.OmpExtension})
+		case "zellij":
+			in.zellij = &zellijTarget{home: home}
 		}
 	}
 	return in, nil
@@ -182,6 +192,11 @@ func (in *install) check() []string {
 	for _, f := range in.files {
 		if old, err := os.ReadFile(f.path); err == nil && string(old) != f.data && !in.force {
 			problems = append(problems, fmt.Sprintf("%s has changes; use --force to overwrite", f.path))
+		}
+	}
+	if in.zellij != nil {
+		if p := in.zellij.check(in.force); p != "" {
+			problems = append(problems, p)
 		}
 	}
 	if in.pluginDir != "" && len(problems) == 0 {
@@ -244,6 +259,11 @@ func (in *install) apply(out, w io.Writer) error {
 			return err
 		}
 		if _, err := fmt.Fprintln(out, f.path); err != nil {
+			return err
+		}
+	}
+	if in.zellij != nil {
+		if err := in.zellij.apply(out); err != nil {
 			return err
 		}
 	}

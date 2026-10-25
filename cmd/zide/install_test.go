@@ -15,7 +15,9 @@ func tempHome(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	t.Setenv("XDG_DATA_HOME", "")
+	for _, k := range []string{"XDG_DATA_HOME", "XDG_CONFIG_HOME", "ZELLIJ_CONFIG_DIR", "ZELLIJ_CONFIG_FILE"} {
+		t.Setenv(k, "")
+	}
 	return home
 }
 
@@ -56,7 +58,7 @@ type fakes struct {
 func fakeHarnesses(t *testing.T, names ...string) fakes {
 	t.Helper()
 	if len(names) == 0 {
-		names = []string{"claude", "codex", "omp"}
+		names = []string{"claude", "codex", "omp", "zellij"}
 	}
 	dir := t.TempDir()
 	bin := filepath.Join(dir, "bin")
@@ -257,7 +259,7 @@ func TestInstallClaudeOtherMarketplace(t *testing.T) {
 
 func TestInstallChecklist(t *testing.T) {
 	home := tempHome(t)
-	fakeHarnesses(t, "codex", "omp")
+	fakeHarnesses(t, "codex", "omp", "zellij")
 	var found []bool
 	pick := func(f []bool) ([]string, bool, error) {
 		found = f
@@ -267,8 +269,8 @@ func TestInstallChecklist(t *testing.T) {
 	if code := installCmd(nil, &out, &errw, true, pick); code != 0 {
 		t.Fatalf("exit %d: %s", code, errw.String())
 	}
-	if !slices.Equal(found, []bool{false, true, true}) {
-		t.Errorf("checked = %v; want claude unchecked, codex and omp checked", found)
+	if !slices.Equal(found, []bool{false, true, true, true}) {
+		t.Errorf("checked = %v; want claude unchecked, codex, omp, and zellij checked", found)
 	}
 	if readFile(t, filepath.Join(home, ".agents/skills/zide/SKILL.md")) != assets.Skill {
 		t.Error("checked harness was not installed")

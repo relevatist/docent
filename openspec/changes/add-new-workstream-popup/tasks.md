@@ -50,10 +50,10 @@
 
 ## 9. Zellij key in zide install
 
-- [ ] 9.1 Probe the Zellij config lookup order with `zellij setup --check` and a temp `HOME`, and record it in design.md
-- [ ] 9.2 Write failing tests for the config edit: no file creates `keybinds { <node> }`; insert after the first top-level `keybinds ... {` line with the rest unchanged byte for byte; `keybinds` in `//` and `/* */` comments ignored; no `keybinds` node appends one block; `{` on the next line, raw strings, and `/-` refuse; same marked node gives no change; a changed marked node refuses without `--force` and is replaced with it; `Alt w` bound outside the markers refuses and names the bind
-- [ ] 9.3 Write failing CLI tests against a temp `HOME` and `ZELLIJ_CONFIG_DIR`: `zide install zellij` writes the config, the backup, and keeps the mode and a symlink; the config path follows `ZELLIJ_CONFIG_FILE`, `ZELLIJ_CONFIG_DIR`, and the first existing dir; `/etc/zellij` only refuses; a failing `setup --check` writes nothing; `zide install codex zellij` with a refused config writes nothing for codex; the checklist has the `zellij` item checked when `zellij` is on `PATH`
-- [ ] 9.4 Implement the `zellij` item in `cmd/zide/install.go` with the node from `assets.ZellijKeys`; update the usage text and the README (`zide install` section and Zellij key section); verify the 9.2 and 9.3 tests pass and `make check` passes
+- [x] 9.1 Probe the Zellij config lookup order with `zellij setup --check` and a temp `HOME`, and record it in design.md
+- [x] 9.2 Write failing tests for the config edit: no file creates `keybinds { <node> }`; insert after the first top-level `keybinds ... {` line with the rest unchanged byte for byte; `keybinds` in `//` and `/* */` comments ignored; no `keybinds` node appends one block; `{` on the next line, raw strings, and `/-` refuse; same marked node gives no change; a changed marked node refuses without `--force` and is replaced with it; `Alt w` bound outside the markers refuses and names the bind
+- [x] 9.3 Write failing CLI tests against a temp `HOME` and `ZELLIJ_CONFIG_DIR`: `zide install zellij` writes the config, the backup, and keeps the mode and a symlink; the config path follows `ZELLIJ_CONFIG_FILE`, `ZELLIJ_CONFIG_DIR`, and the first existing dir; `/etc/zellij` only refuses; a failing `setup --check` writes nothing; `zide install codex zellij` with a refused config writes nothing for codex; the checklist has the `zellij` item checked when `zellij` is on `PATH`
+- [x] 9.4 Implement the `zellij` item in `cmd/zide/install.go` with the node from `assets.ZellijKeys`; update the usage text and the README (`zide install` section and Zellij key section); verify the 9.2 and 9.3 tests pass and `make check` passes
 
 ## Workflow follow-up
 
