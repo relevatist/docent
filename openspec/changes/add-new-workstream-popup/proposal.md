@@ -9,7 +9,7 @@ To open a second workstream, the user must go to a shell pane, type `zide <path>
 - Add `zide new`: a TUI that runs in a floating Zellij pane. The user fuzzy-filters a list of directories, optionally changes the harness, and confirms. zide then opens a workstream tab for that directory and the pane closes.
 - The directory list has the recent workstream directories first, then git repos and worktrees found under the config key `roots`.
 - zide saves each launched directory in a state file, `$XDG_STATE_HOME/zide/recent.toml`.
-- The harness field takes a command with args, or the name of an alias. `tab` cycles through the current tab's harness, the aliases, and the built-in harnesses.
+- The harness field takes a command with args, or the name of an alias. `tab` moves focus between the directory filter and the harness field. In the harness field, `up`/`down` cycles through the current tab's harness, the aliases, and the built-in harnesses.
 - Add harness aliases to `config.toml`: `[harnesses.<name>]` with `command` and an optional `kind`. The `harness` key and `--harness` also take alias names.
 - `zide send` takes the ref format from the alias `kind`, so wrapped commands (for example a sandbox) still get `@` refs.
 - zide finds open workstreams from the working directory (`pane_cwd`) of each tab's `editor` pane. If the chosen directory is already open in a tab, `zide new` asks to switch to that tab or open another one.
