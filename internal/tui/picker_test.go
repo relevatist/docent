@@ -224,3 +224,18 @@ func TestPickerHarnessKeepsSelection(t *testing.T) {
 		t.Errorf("result = %+v, %v; want %s", got, ok, dirs[2])
 	}
 }
+
+func TestPickerPaste(t *testing.T) {
+	p, dirs := newPicker(t, PickerInput{Harness: "claude"})
+	press(p, "down")
+	p.Update(tea.PasteMsg{Content: "li\r\nb"})
+	if got := p.matches(); p.query != "lib" || p.cur != 0 || !slices.Equal(got, dirs[2:]) {
+		t.Fatalf("query %q, cur %d, matches %q", p.query, p.cur, got)
+	}
+	press(p, "backspace", "backspace", "backspace", "down", "tab")
+	p.Update(tea.PasteMsg{Content: " --x\n"})
+	press(p, "enter")
+	if got, ok := p.result(); !ok || got != (Picked{Dir: dirs[1], Harness: "claude --x"}) {
+		t.Errorf("result = %+v, %v; want %s", got, ok, dirs[1])
+	}
+}

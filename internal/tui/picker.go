@@ -96,6 +96,11 @@ func (p *picker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		p.height = msg.Height
 	case reposMsg:
 		p.dirs, p.walking = recent.Candidates(p.dirs, msg), false
+	case tea.PasteMsg:
+		if p.openTab == "" {
+			text := strings.NewReplacer("\r", "", "\n", "").Replace(msg.Content)
+			p.edit(func(s string) string { return s + text })
+		}
 	case tea.KeyPressMsg:
 		if msg.String() == "ctrl+c" {
 			return p, tea.Quit
