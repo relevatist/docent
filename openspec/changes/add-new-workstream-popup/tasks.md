@@ -13,7 +13,7 @@
 - [x] 2.3 Write failing tests for `panes.Marker` and `panes.Unwrap`: no wrapper, `ZIDE_HARNESS_KIND` wrapper, a command with args after the wrapper
 - [x] 2.4 Change `launch.Layout` to take a `config.Harness` and the tab name: wrap the harness pane in `/usr/bin/env ZIDE_HARNESS_KIND=<kind>` only when the kind differs from the command's base name; the editor pane stays `hx`; verify the updated `TestLayout*` tests assert both cases and that a plain `claude` harness is not wrapped
 - [x] 2.5 Make `send` take the kind from `ZIDE_HARNESS_KIND`, else from `Unwrap(cmd)`; verify a send test with a pane command `env ZIDE_HARNESS_KIND=omp sandbox-exec -f omp.sb omp` gives `@a.go:1 `
-- [ ] 2.6 Update the README config section with `[harnesses.<name>]` and `roots`; verify the TOML example parses with a test that loads it
+- [x] 2.6 Update the README config section with `[harnesses.<name>]` and `roots`; verify the TOML example parses with a test that loads it
 
 ## 3. Recent directories
 

@@ -141,3 +141,23 @@ func TestBadAlias(t *testing.T) {
 		}
 	}
 }
+
+func TestReadmeExample(t *testing.T) {
+	b, err := os.ReadFile("../../README.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, example, _ := strings.Cut(string(b), "```toml\n")
+	example, _, _ = strings.Cut(example, "```")
+	write(t, example)
+	c, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h, err := c.Resolve(c.Harness); err != nil || h.Command != "claude" {
+		t.Errorf("Resolve(%q) = %+v, %v", c.Harness, h, err)
+	}
+	if h, err := c.Resolve("omp-sandbox"); err != nil || h.Kind != "omp" || len(c.Roots) != 2 {
+		t.Errorf("Load = %+v; Resolve = %+v, %v", c, h, err)
+	}
+}

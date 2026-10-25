@@ -39,9 +39,16 @@ zide --name app-retry ~/wt/retry/app
 Config file `~/.config/zide/config.toml` (all keys optional):
 
 ```toml
-harness = "claude"     # harness command; --harness overrides it for one tab
-focus_on_send = true   # move focus to the harness after `zide send`
+harness = "claude"         # harness command or alias; --harness overrides it for one tab
+focus_on_send = true       # move focus to the harness after `zide send`
+roots = ["~/src", "~/wt"]  # where `zide new` looks for git repos and worktrees
+
+[harnesses.omp-sandbox]    # harness alias: use `--harness omp-sandbox`
+command = "sandbox-exec -f ~/omp.sb omp"
+kind = "omp"               # optional; default: base name of the first word of command
 ```
+
+`kind` is the harness that the command runs. `zide send ref` uses it to format references, so a wrapped harness still gets `@` references. `kind` must be one word.
 
 ## Helix keys
 
