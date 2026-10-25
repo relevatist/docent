@@ -4,7 +4,7 @@
 
 See proposal.md - Why. Facts checked on the target machine (Zellij 0.45.1):
 
-- `zellij action list-panes --all --json` has no cwd field. It has `terminal_command`, `title`, `tab_id`, `tab_name`. In a live tab it shows `hx` and `claude` for the editor and harness panes. `terminal_command` includes the full argv, joined with single spaces, with no quotes or escapes. A pane with `command="/usr/bin/env"` and args `"ZIDE_DIR=/tmp/a b" "hx"` shows `/usr/bin/env ZIDE_DIR=/tmp/a b hx`. A pane with args `"ZIDE_HARNESS_KIND=omp" "sleep" "600"` shows `/usr/bin/env ZIDE_HARNESS_KIND=omp sleep 600`. Plugin panes show `null`, and so does a default shell pane. In that check, terminal panes also had `pane_command` (`hx`, `sleep 600`) and `pane_cwd` (the session's start directory), so the "no cwd field" note above is not true for those panes.
+- `zellij action list-panes --all --json` gives `terminal_command`, `pane_command`, `pane_cwd`, `title`, `tab_id`, and `tab_name` for terminal panes. In a live tab it shows `hx` and `claude` for the editor and harness panes. `pane_cwd` is the pane's working directory (at start, the tab or session start directory). zide uses `pane_cwd` of the `editor` pane to find open workstreams. `terminal_command` includes the full argv, joined with single spaces, with no quotes or escapes: a pane with `command="/usr/bin/env"` and args `"A=/tmp/a b" "hx"` shows `/usr/bin/env A=/tmp/a b hx`, and a pane with args `"ZIDE_HARNESS_KIND=omp" "sleep" "600"` shows `/usr/bin/env ZIDE_HARNESS_KIND=omp sleep 600`. Plugin panes show `null`, and so does a default shell pane.
 - `zellij action go-to-tab-by-id <id>` exists. It takes the `tab_id` from `list-panes` or `list-tabs --json` and makes that tab active. An unknown id (`99`) exits 0 and does nothing.
 - `zellij action new-tab --name t2` run from a `--floating --close-on-exit` pane makes the new tab active (`list-tabs --json` shows `"active": true` for it). When the command exits, the floating pane closes and is removed from the old tab. In `list-panes`, `is_focused` is per tab: the old tab's editor pane stays `is_focused: true`, so use `list-tabs --json` `active` to find the active tab.
 - Default keybinds use `Alt c f h i j k l n o p`. `Alt w` is free, and the user's `config.kdl` does not bind it.
@@ -24,32 +24,31 @@ See proposal.md - Why. Facts checked on the target machine (Zellij 0.45.1):
 
 ## Decisions
 
-### Markers as `env` wrappers in the layout
-Each pane that needs a marker runs through `env`:
+### Open-tab detection by `pane_cwd`
+A tab holds a directory when its `editor` pane has that directory as `pane_cwd` in `list-panes --all --json`. Zellij 0.45.1 shows this field for terminal panes. The editor pane stays `command="hx"`, with no wrapper.
+
+### Harness kind marker as an `env` wrapper
+The harness pane runs through `/usr/bin/env` only when the kind differs from the base name of the first word of the command, so plain tabs keep `claude` as the pane command:
 
 ```kdl
-pane name="editor" command="env" size="60%" focus=true {
-    args "ZIDE_DIR=/abs/dir" "hx"
-}
-pane name="harness" command="env" {
+pane name="harness" command="/usr/bin/env" {
     args "ZIDE_HARNESS_KIND=omp" "sandbox-exec" "-f" "omp.sb" "omp"
 }
 ```
 
-The harness pane is wrapped only when the kind differs from the base name of the first word of the command, so plain tabs keep `claude` as the pane command.
-
-Parsing lives in `internal/panes`, next to `Lookup`:
+`terminal_command` is the argv joined with single spaces, with no quotes: `/usr/bin/env ZIDE_HARNESS_KIND=omp sandbox-exec -f omp.sb omp`. The kind is one word (the config check enforces this), so splitting on spaces is safe for the kind. Parsing lives in `internal/panes`, next to `Lookup`:
 
 ```go
-// Marker returns the value of KEY= in an `env KEY=value cmd...` pane command.
-func Marker(cmd, key string) (string, bool)
-// Unwrap returns cmd without a leading `env KEY=value...`.
+// Marker returns the value of ZIDE_HARNESS_KIND in an `env ZIDE_HARNESS_KIND=kind cmd...` pane command.
+func Marker(cmd string) (string, bool)
+// Unwrap returns cmd without a leading `env ZIDE_HARNESS_KIND=kind`.
 func Unwrap(cmd string) string
 ```
 
-A directory can contain spaces, and `terminal_command` may join the args with spaces. So the editor marker is parsed as the text between `env ZIDE_DIR=` and the final ` hx`. The `kind` value must be one word (the config check enforces this).
+Alternatives: a tab-to-dir state file (goes stale when tabs close, and needs a lock); the pane name (`harness` is the lookup key for all commands); the tab name (the user can rename it).
 
-Alternatives: a tab-to-dir state file (goes stale when tabs close, and needs a lock); the pane name (`editor` is the lookup key for all commands); the tab name (the user can rename it).
+### Tab name in the layout
+`launch.Layout` takes the resolved tab name (`cmp.Or(name, filepath.Base(dir))`) and writes `tab name="<name>" {`. Without it, `--new-session-with-layout` names the tab `Tab #1`. `new-tab --name` still sets the name inside Zellij.
 
 ### Harness resolution in `internal/config`
 
@@ -68,9 +67,9 @@ type Harness struct{ Command, Kind string }
 func (c Config) Resolve(s string) (Harness, error)
 ```
 
-An alias matches only when `s` is exactly its name. Otherwise `s` is a command, and its kind is the base name of its first word. `launch.Layout` takes a `Harness` and the directory, not a command string. `config.Load` checks aliases (empty `command`, `kind` with spaces) and returns an error that names the alias.
+An alias matches only when `s` is exactly its name. Otherwise `s` is a command, and its kind is the base name of its first word. `launch.Layout` takes a `Harness` and the tab name, not a command string. `config.Load` checks aliases (empty `command`, `kind` with spaces) and returns an error that names the alias.
 
-`send` gets the kind as `Marker(cmd, "ZIDE_HARNESS_KIND")`, or else from `Unwrap(cmd)`, as it does now.
+`send` gets the kind as `Marker(cmd)`, or else from `Unwrap(cmd)`, as it does now.
 
 ### Recent state in `internal/recent`
 
@@ -95,7 +94,7 @@ tab: field  up/down: move or cycle  enter: open  esc: cancel
 - No new dependency. The text fields are a string and a cursor at the end: runes append and `backspace` deletes. `bubbles/textinput` is not needed for one-line input with no cursor movement.
 - The model gets the recent list at start, and the root walk runs as a `tea.Cmd`, so the recent list shows at once and the repos append when the walk ends.
 - The picker returns a result (`dir`, harness string, open/switch/another). `cmd/zide/new.go` does all the Zellij calls, so the model tests do not need a fake runner.
-- Open-tab prompt: after `enter`, `new.go` checks the `ZIDE_DIR` markers. If one matches, the picker shows a second screen with `switch` / `open another`. To keep this in one program, the model gets an `isOpen(dir) (tab string, ok bool)` func at start.
+- Open-tab prompt: after `enter`, `new.go` checks the `pane_cwd` of each `editor` pane. If one matches, the picker shows a second screen with `switch` / `open another`. To keep this in one program, the model gets an `isOpen(dir) (tab string, ok bool)` func at start.
 
 Tab switching inside the popup was considered (`tab` / `shift+tab` cycles the harness). But the harness field is now a text field, so `tab` moves focus between fields and `up` / `down` cycles the harness.
 
@@ -126,12 +125,12 @@ keybinds {
 
 ## Risks / Trade-offs
 
-- [`terminal_command` may not include the args] -> Check this first (task 1.1). If the args are missing, use the pane title instead: name the pane `editor` and set the title through a command. If that also fails, stop and ask the user.
+- [`terminal_command` may not include the args] -> Checked (task 1.1): it includes them.
 - [The `env` wrapper changes the pane command that users and other tools see] -> Only `send` reads it, and `Unwrap` handles it.
 - [`env` is not on `PATH` in an unusual environment] -> `/usr/bin/env` exists on macOS and Linux. Use the absolute path `/usr/bin/env`.
-- [Tabs from an older zide are not detected as open] -> Accepted. The spec states it.
+- [`:cd` in Helix changes the editor `pane_cwd`, so that tab is no longer detected for its first directory] -> Accepted. The spec states it.
 - [Large roots make the walk slow] -> Depth 3, hidden directories skipped, and the walk is asynchronous, so the picker does not block.
 
 ## Migration Plan
 
-No migration. Existing configs keep working. Old tabs keep working, but the picker does not detect them.
+No migration. Existing configs keep working. Old tabs keep working, and the picker detects them by `pane_cwd`.

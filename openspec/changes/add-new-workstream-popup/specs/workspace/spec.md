@@ -17,6 +17,17 @@ zide SHALL read the harness command from `~/.config/zide/config.toml` (`harness`
 - **WHEN** the config has `[harnesses.omp-sandbox]` with `command = "sandbox-exec -f omp.sb omp"` and the user runs `zide --harness omp-sandbox`
 - **THEN** the harness pane runs `sandbox-exec -f omp.sb omp`
 
+### Requirement: Tab name
+`zide --name <name> [dir]` SHALL name the tab (or new session) `<name>`. Without `--name`, the name SHALL be the directory basename.
+
+#### Scenario: Two worktrees with the same basename
+- **WHEN** the user runs `zide --name app-retry ~/wt/retry/app`
+- **THEN** the new tab is named `app-retry`
+
+#### Scenario: Launch outside Zellij names the tab
+- **WHEN** the user runs `zide ~/src/app` outside Zellij and no session named `app` exists
+- **THEN** a new session named `app` starts, and its workstream tab is named `app`
+
 ## ADDED Requirements
 
 ### Requirement: Harness aliases
@@ -40,13 +51,6 @@ When the harness kind differs from the base name of the first word of the harnes
 #### Scenario: Wrapped harness
 - **WHEN** a tab is launched with the alias `omp-sandbox` (kind `omp`)
 - **THEN** the harness pane command shows the kind `omp`, and the harness process has `ZIDE_HARNESS_KIND=omp`
-
-### Requirement: Directory marker on the editor pane
-The editor pane SHALL show the absolute workstream directory in its pane command, so zide can find which tab holds which directory. The editor process SHALL get the environment variable `ZIDE_DIR` set to that directory.
-
-#### Scenario: Marker present
-- **WHEN** the user runs `zide ~/src/app` inside Zellij
-- **THEN** the editor pane command in `zellij action list-panes` shows the absolute path of `~/src/app`
 
 ### Requirement: Recent directories
 Each successful launch, by `zide [dir]` or `zide new`, SHALL put the absolute directory at the top of a recent list in `$XDG_STATE_HOME/zide/recent.toml` (default `~/.local/state/zide/recent.toml`), remove it from lower positions, and keep at most 20 entries. If zide cannot write the file, it SHALL print a warning and the launch SHALL still succeed. zide SHALL NOT write to `config.toml`.

@@ -82,7 +82,7 @@ The picker SHALL have a harness field that takes a harness command with args, or
 - **THEN** the picker shows that the harness is empty and opens nothing
 
 ### Requirement: Directory already open
-When the chosen directory is open in a workstream tab of the current session, the picker SHALL ask the user to switch to that tab or open another tab. Switch SHALL focus that tab and open nothing. Another SHALL open a new tab named after the directory with the first free suffix `-2`, `-3`, and so on.
+When the chosen directory is open in a workstream tab of the current session, the picker SHALL ask the user to switch to that tab or open another tab. Switch SHALL focus that tab and open nothing. Another SHALL open a new tab named after the directory with the first free suffix `-2`, `-3`, and so on. A tab SHALL count as open for a directory when its `editor` pane has that directory as its working directory (`pane_cwd` in `zellij action list-panes`).
 
 #### Scenario: Switch
 - **WHEN** `~/src/app` is open in tab `app` and the user chooses it and then chooses switch
@@ -92,9 +92,13 @@ When the chosen directory is open in a workstream tab of the current session, th
 - **WHEN** tabs `app` and `app-2` exist, `~/src/app` is open, and the user chooses open another
 - **THEN** a new tab named `app-3` opens for `~/src/app`
 
-#### Scenario: Tab from an older zide
-- **WHEN** a tab for `~/src/app` was opened by a zide version without the directory marker
-- **THEN** the picker does not detect it and opens a new tab named after the directory
+#### Scenario: Detected by the editor pane directory
+- **WHEN** a tab has an `editor` pane whose working directory in `zellij action list-panes` is `~/src/app`, and the user chooses `~/src/app`
+- **THEN** the picker asks to switch to that tab or open another tab
+
+#### Scenario: Editor directory changed with `:cd`
+- **WHEN** a tab was opened for `~/src/app` and the user ran `:cd ~/src/lib` in Helix, and the user chooses `~/src/app`
+- **THEN** the picker does not detect the tab and opens a new tab named after the directory (accepted limit)
 
 ### Requirement: Zellij keybinding
 zide SHALL ship a Zellij keybinding snippet that binds `Alt w`, in all modes except locked, to run `zide new` in a floating pane that closes when `zide new` exits. zide SHALL NOT change the user's Zellij config.

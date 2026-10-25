@@ -2,15 +2,16 @@
 
 ## 1. Verify Zellij behavior
 
-- [x] 1.1 In a background Zellij 0.45 session, open a pane with `command="/usr/bin/env"` and args `"ZIDE_DIR=/tmp/a b" "hx"`. Verify that `list-panes --all --json` shows the full argv in `terminal_command`, and record the exact format in design.md. If the args are missing, stop and ask the user (see design.md - Risks)
+- [x] 1.1 In a background Zellij 0.45 session, open a pane with `command="/usr/bin/env"` and args `"A=/tmp/a b" "hx"`. Verify that `list-panes --all --json` shows the full argv in `terminal_command`, and record the exact format in design.md. If the args are missing, stop and ask the user (see design.md - Risks)
 - [x] 1.2 In the same session, verify that `zellij action new-tab` run from a floating pane focuses the new tab, and that a `close_on_exit` floating pane closes in the old tab. Record the result in design.md
 
 ## 2. Harness aliases and kind
 
+- [ ] 2.0 Make `launch.Layout` take the tab name and emit `tab name=...`; verify `TestRunOutsideZellij` asserts the layout tab name equals the session name and `TestLayout` asserts the quoted name
 - [ ] 2.1 Write failing tests for `config.Load` and `Config.Resolve`: alias with `kind`; alias with default kind from the base name of the first word; plain command; exact name match only; empty `command` and `kind` with spaces give an error that names the alias; `roots` with a leading `~` expands to the home directory
 - [ ] 2.2 Implement `[harnesses.<name>]`, `roots`, and `Resolve`; make `runLaunch` resolve `--harness` and `harness`; verify the 2.1 tests pass and a launch test with `--harness omp-sandbox` asserts the alias command in the layout
-- [ ] 2.3 Write failing tests for `panes.Marker` and `panes.Unwrap`: no wrapper, one key, a value with spaces for `ZIDE_DIR` (text up to the final ` hx`), a command with args after the wrapper
-- [ ] 2.4 Change `launch.Layout` to take the directory and a `config.Harness`: wrap the editor pane in `/usr/bin/env ZIDE_DIR=<dir> hx`, and wrap the harness pane in `/usr/bin/env ZIDE_HARNESS_KIND=<kind>` only when the kind differs from the command's base name; verify the updated `TestLayout*` tests assert both cases and that a plain `claude` harness is not wrapped
+- [ ] 2.3 Write failing tests for `panes.Marker` and `panes.Unwrap`: no wrapper, `ZIDE_HARNESS_KIND` wrapper, a command with args after the wrapper
+- [ ] 2.4 Change `launch.Layout` to take a `config.Harness` and the tab name: wrap the harness pane in `/usr/bin/env ZIDE_HARNESS_KIND=<kind>` only when the kind differs from the command's base name; the editor pane stays `hx`; verify the updated `TestLayout*` tests assert both cases and that a plain `claude` harness is not wrapped
 - [ ] 2.5 Make `send` take the kind from `ZIDE_HARNESS_KIND`, else from `Unwrap(cmd)`; verify a send test with a pane command `env ZIDE_HARNESS_KIND=omp sandbox-exec -f omp.sb omp` gives `@a.go:1 `
 - [ ] 2.6 Update the README config section with `[harnesses.<name>]` and `roots`; verify the TOML example parses with a test that loads it
 
@@ -28,7 +29,7 @@
 ## 5. Picker TUI
 
 - [ ] 5.1 Write failing model tests for the picker in `internal/tui`: typing filters; `up`/`down` and `ctrl+p`/`ctrl+n` move; `tab` moves focus; `up`/`down` in the harness field cycles the deduped candidates in order (current tab, aliases by name, `claude`, `omp`, `codex`); empty harness on `enter` shows an error; `esc` cancels; walk results append to the list; the hint shows when the list is empty and there are no roots
-- [ ] 5.2 Write failing model tests for the open-tab screen: `enter` on a directory for which `isOpen` returns a tab shows `switch` / `open another`; each choice returns the matching result
+- [ ] 5.2 Write failing model tests for the open-tab screen: `enter` on a directory for which `isOpen` (from the editor pane `pane_cwd`) returns a tab shows `switch` / `open another`; each choice returns the matching result
 - [ ] 5.3 Implement the picker model; verify the 5.1 and 5.2 tests pass
 
 ## 6. `zide new` command
@@ -39,7 +40,7 @@
 
 ## 7. Integration
 
-- [ ] 7.1 Extend `integration_test.go`: launch a workstream for a temp directory, and verify `list-panes` shows the `ZIDE_DIR` marker and that `zide open` still finds the editor pane
+- [ ] 7.1 Extend `integration_test.go`: launch a workstream for a temp directory, and verify `list-panes` shows that directory as the editor pane `pane_cwd` and that `zide open` still finds the editor pane
 - [ ] 7.2 Manual check in a real session: press `Alt w` in the editor pane, filter to a worktree, choose an alias with a `kind`, confirm; verify the new tab opens, `space z r` sends an `@` ref, `Alt w` on the same directory offers switch and open another, and both work
 
 ## Workflow follow-up
