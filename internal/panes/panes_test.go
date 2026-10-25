@@ -3,6 +3,7 @@ package panes
 import (
 	"encoding/json/v2"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -108,5 +109,19 @@ func TestMarker(t *testing.T) {
 		if got := Unwrap(tt.cmd); got != tt.rest {
 			t.Errorf("Unwrap(%q) = %q; want %q", tt.cmd, got, tt.rest)
 		}
+	}
+}
+
+func TestTabs(t *testing.T) {
+	got, err := Tabs(fake(t))
+	want := []Tab{{0, "one", "/Users/thane/work/relevatist/zide"}, {1, "two", "/Users/thane/work/relevatist/zide"}}
+	if err != nil || !slices.Equal(got, want) {
+		t.Errorf("Tabs = %+v, %v; want %+v", got, err, want)
+	}
+	f := &zellij.Fake{Out: map[string]string{"action list-panes --all --json": `[
+		{"id":0,"is_plugin":true,"title":"editor","tab_id":3,"tab_name":"x","pane_cwd":"/p"},
+		{"id":1,"title":"shell","tab_id":3,"tab_name":"x","pane_cwd":"/s"}]`}}
+	if got, err := Tabs(f); err != nil || !slices.Equal(got, []Tab{{ID: 3, Name: "x"}}) {
+		t.Errorf("Tabs = %+v, %v; want no editor dir", got, err)
 	}
 }

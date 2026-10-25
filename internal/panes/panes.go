@@ -1,4 +1,5 @@
-// Package panes finds named panes in the caller's Zellij tab.
+// Package panes finds named panes in the caller's Zellij tab, and the tabs of
+// the session.
 package panes
 
 import (
@@ -7,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -18,7 +20,9 @@ type pane struct {
 	IsPlugin bool   `json:"is_plugin"`
 	Title    string `json:"title"`
 	TabID    int    `json:"tab_id"`
+	TabName  string `json:"tab_name"`
 	Command  string `json:"terminal_command"`
+	Cwd      string `json:"pane_cwd"`
 }
 
 // Pane is a terminal pane in the caller's tab.
@@ -44,19 +48,9 @@ func Lookup(r zellij.Runner, name string) (Pane, error) {
 	if err != nil {
 		return Pane{}, fmt.Errorf("bad ZELLIJ_PANE_ID %q", self)
 	}
-	out, err := zellij.ListPanes(r)
+	terms, err := terminals(r)
 	if err != nil {
 		return Pane{}, err
-	}
-	var all []pane
-	if err := json.Unmarshal(out, &all); err != nil {
-		return Pane{}, fmt.Errorf("parse list-panes: %w", err)
-	}
-	var terms []pane
-	for _, p := range all {
-		if !p.IsPlugin {
-			terms = append(terms, p)
-		}
 	}
 	tab := -1
 	for _, p := range terms {
@@ -73,6 +67,45 @@ func Lookup(r zellij.Runner, name string) (Pane, error) {
 		}
 	}
 	return Pane{}, fmt.Errorf("no %q pane in this tab", name)
+}
+
+// Tab is a tab of the session.
+type Tab struct {
+	ID   int
+	Name string
+	Dir  string // working directory of the tab's editor pane; empty without one
+}
+
+// Tabs returns the tabs of the session that have a terminal pane.
+func Tabs(r zellij.Runner) ([]Tab, error) {
+	terms, err := terminals(r)
+	if err != nil {
+		return nil, err
+	}
+	var tabs []Tab
+	for _, p := range terms {
+		i := slices.IndexFunc(tabs, func(t Tab) bool { return t.ID == p.TabID })
+		if i < 0 {
+			tabs = append(tabs, Tab{ID: p.TabID, Name: p.TabName})
+			i = len(tabs) - 1
+		}
+		if p.Title == "editor" && tabs[i].Dir == "" {
+			tabs[i].Dir = p.Cwd
+		}
+	}
+	return tabs, nil
+}
+
+func terminals(r zellij.Runner) ([]pane, error) {
+	out, err := zellij.ListPanes(r)
+	if err != nil {
+		return nil, err
+	}
+	var all []pane
+	if err := json.Unmarshal(out, &all); err != nil {
+		return nil, fmt.Errorf("parse list-panes: %w", err)
+	}
+	return slices.DeleteFunc(all, func(p pane) bool { return p.IsPlugin }), nil
 }
 
 // KindVar is the variable that a zide layout sets on a harness pane whose
