@@ -20,6 +20,9 @@ func TestFilter(t *testing.T) {
 		}
 	}
 	src := filepath.Dir(lib)
+	if err := os.WriteFile(filepath.Join(home, "f"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
 	dirs := []string{retry, lib, "/opt/RTAP", x}
 	tests := []struct {
 		q    string
@@ -37,6 +40,9 @@ func TestFilter(t *testing.T) {
 		{home, []string{home}},
 		{lib, []string{lib}},
 		{"~/missing", nil},
+		{"/", []string{"/", retry, lib, "/opt/RTAP", x}},
+		{"~/f", nil},
+		{"~src", []string{lib}},
 	}
 	for _, tt := range tests {
 		if got := filter(dirs, tt.q, home); !slices.Equal(got, tt.want) {
@@ -60,6 +66,8 @@ func TestFilterRelative(t *testing.T) {
 		{"../" + filepath.Base(cwd) + "/app", []string{app}},
 		{".", []string{cwd}},
 		{"..", []string{filepath.Dir(cwd)}},
+		{"~", nil},
+		{"~" + cwd, nil},
 	} {
 		if got := filter([]string{other, app}, tt.q, ""); !slices.Equal(got, tt.want) {
 			t.Errorf("filter(%q) = %q; want %q", tt.q, got, tt.want)
