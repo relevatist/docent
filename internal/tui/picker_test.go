@@ -50,8 +50,20 @@ func TestFilterRelative(t *testing.T) {
 	t.Chdir(cwd)
 	app := mkdirs(t, cwd, "app")[0]
 	other := "/opt/app"
-	if got, want := filter([]string{other, app}, "app", ""), []string{app, other}; !slices.Equal(got, want) {
-		t.Errorf("filter = %q; want %q", got, want)
+	for _, tt := range []struct {
+		q    string
+		want []string
+	}{
+		{"app", []string{other, app}},
+		{"./app", []string{app}},
+		{"./app/", []string{app}},
+		{"../" + filepath.Base(cwd) + "/app", []string{app}},
+		{".", []string{cwd}},
+		{"..", []string{filepath.Dir(cwd)}},
+	} {
+		if got := filter([]string{other, app}, tt.q, ""); !slices.Equal(got, tt.want) {
+			t.Errorf("filter(%q) = %q; want %q", tt.q, got, tt.want)
+		}
 	}
 }
 

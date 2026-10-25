@@ -367,14 +367,16 @@ func filter(dirs []string, q, home string) []string {
 	return out
 }
 
-// typedDir returns q as an absolute path when it is a directory. A leading ~
-// means home, and a relative path is relative to the current directory.
+// typedDir returns q as an absolute path when it is a path to a directory.
+// Only text that starts with /, ~/, ./ or ../, or is ~, . or .., is a path.
+// A leading ~ means home, and . means the current directory.
 func typedDir(q, home string) (string, bool) {
-	if q == "" {
-		return "", false
-	}
-	if q == "~" || strings.HasPrefix(q, "~/") {
+	switch {
+	case q == "~" || strings.HasPrefix(q, "~/"):
 		q = filepath.Join(home, q[1:])
+	case q == "." || q == ".." || strings.HasPrefix(q, "/") || strings.HasPrefix(q, "./") || strings.HasPrefix(q, "../"):
+	default:
+		return "", false
 	}
 	q, err := filepath.Abs(q)
 	if err != nil {
