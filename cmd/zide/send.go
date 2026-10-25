@@ -45,10 +45,7 @@ func doSend(r zellij.Runner, stdin io.Reader, args []string) error {
 	}
 	switch {
 	case len(args) == 2 && args[0] == "ref":
-		h, err := cfg.Resolve(cfg.Harness)
-		if err != nil {
-			return err
-		}
+		h, _ := cfg.Resolve(cfg.Harness)
 		return send.PasteRef(r, args[1], h.Kind, cfg.FocusOnSend)
 	case len(args) == 1 && args[0] == "text":
 		b, err := io.ReadAll(stdin)

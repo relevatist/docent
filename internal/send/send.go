@@ -22,9 +22,11 @@ func FormatRef(harness, ref string) (string, error) {
 	if lines != "" {
 		file += ":" + lines
 	}
-	switch filepath.Base(strings.Fields(harness + " ")[0]) {
-	case "claude", "omp":
-		file = "@" + file
+	if f := strings.Fields(harness); len(f) > 0 {
+		switch filepath.Base(f[0]) {
+		case "claude", "omp":
+			file = "@" + file
+		}
 	}
 	return file + " ", nil
 }
