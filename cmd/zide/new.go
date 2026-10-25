@@ -68,7 +68,7 @@ func newWorkstream(r zellij.Runner, w io.Writer, pick pickerFunc) error {
 		Recent:  dirs,
 		Roots:   c.Roots,
 		Harness: currentHarness(r, c),
-		Aliases: slices.Sorted(maps.Keys(c.Harnesses)),
+		Aliases: slices.Collect(maps.Keys(c.Harnesses)),
 		IsOpen: func(dir string) (string, bool) {
 			t, ok := openTab(tabs, dir)
 			return t.Name, ok
