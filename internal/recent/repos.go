@@ -50,11 +50,10 @@ func Repos(ctx context.Context, roots []string) iter.Seq[string] {
 	}
 }
 
-// Candidates returns the recent directories that still exist, then the repos,
-// each directory once.
-func Candidates(recent, repos []string) []string {
+// Candidates returns the recent directories that still exist, each once.
+func Candidates(recent []string) []string {
 	var dirs []string
-	for _, d := range slices.Concat(recent, repos) {
+	for _, d := range recent {
 		if slices.Contains(dirs, d) {
 			continue
 		}

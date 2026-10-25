@@ -85,11 +85,11 @@ func TestReposBreak(t *testing.T) {
 
 func TestCandidates(t *testing.T) {
 	home := t.TempDir()
-	tree(t, home, "wt/retry/app/", "src/app/", "src/lib/")
-	retry, app, lib := filepath.Join(home, "wt/retry/app"), filepath.Join(home, "src/app"), filepath.Join(home, "src/lib")
+	tree(t, home, "wt/retry/app/", "src/app/")
+	retry, app := filepath.Join(home, "wt/retry/app"), filepath.Join(home, "src/app")
 	gone := filepath.Join(home, "gone")
-	got := Candidates([]string{retry, gone, app, retry}, []string{app, lib})
-	if want := []string{retry, app, lib}; !slices.Equal(got, want) {
+	got := Candidates([]string{retry, gone, app, retry})
+	if want := []string{retry, app}; !slices.Equal(got, want) {
 		t.Errorf("Candidates = %q; want %q", got, want)
 	}
 }

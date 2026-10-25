@@ -98,7 +98,7 @@ func newPickerModel(in PickerInput) *picker {
 	p := &picker{
 		in:      in,
 		home:    home,
-		dirs:    recent.Candidates(in.Recent, nil),
+		dirs:    recent.Candidates(in.Recent),
 		seen:    map[string]bool{},
 		walking: len(in.Roots) > 0,
 		harness: in.Harness,
