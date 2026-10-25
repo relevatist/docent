@@ -113,8 +113,8 @@ When the chosen directory is open in a workstream tab of the current session, th
 - **THEN** the picker does not detect the tab and opens a new tab named after the directory (accepted limit)
 
 ### Requirement: Zellij keybinding
-zide SHALL ship a Zellij keybinding snippet that binds `Alt w`, in all modes except locked, to run `zide new` in a floating pane that closes when `zide new` exits. zide SHALL NOT change the user's Zellij config.
+zide SHALL ship a Zellij keybinding snippet that binds `Alt w`, in all modes except locked, to run `zide new` in a floating pane that closes when `zide new` exits. zide SHALL change the user's Zellij config only through `zide install zellij` (see `harness-integration`).
 
 #### Scenario: Open the picker from the editor
-- **WHEN** the user has added the snippet to the Zellij config and presses `Alt w` in the editor pane
+- **WHEN** the user has added the snippet to the Zellij config (by hand or with `zide install zellij`) and presses `Alt w` in the editor pane
 - **THEN** a floating pane shows the picker, and it closes after the user confirms or cancels

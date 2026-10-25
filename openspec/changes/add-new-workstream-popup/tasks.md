@@ -48,6 +48,13 @@
 - [x] 8.1 Write failing tests: a repo 5 levels down is a hit; the walk stops when its context is done; the picker shows a batch of hits before the walk ends; every picker exit cancels the walk and the walk goroutine returns. Remove the depth limit, stream hits in batches, and cancel the walk (without a wait) when the picker exits; verify the tests pass
 - [x] 8.2 Write failing tests for the filter: a typed path (starts with `/`, `~/`, `./` or `../`, or is `~`, `.` or `..`) to an existing directory comes first, also when other directories match, and shows once; a plain word is only a fuzzy query. Implement it and verify the tests pass
 
+## 9. Zellij key in zide install
+
+- [ ] 9.1 Probe the Zellij config lookup order with `zellij setup --check` and a temp `HOME`, and record it in design.md
+- [ ] 9.2 Write failing tests for the config edit: no file creates `keybinds { <node> }`; insert after the first top-level `keybinds ... {` line with the rest unchanged byte for byte; `keybinds` in `//` and `/* */` comments ignored; no `keybinds` node appends one block; `{` on the next line, raw strings, and `/-` refuse; same marked node gives no change; a changed marked node refuses without `--force` and is replaced with it; `Alt w` bound outside the markers refuses and names the bind
+- [ ] 9.3 Write failing CLI tests against a temp `HOME` and `ZELLIJ_CONFIG_DIR`: `zide install zellij` writes the config, the backup, and keeps the mode and a symlink; the config path follows `ZELLIJ_CONFIG_FILE`, `ZELLIJ_CONFIG_DIR`, and the first existing dir; `/etc/zellij` only refuses; a failing `setup --check` writes nothing; `zide install codex zellij` with a refused config writes nothing for codex; the checklist has the `zellij` item checked when `zellij` is on `PATH`
+- [ ] 9.4 Implement the `zellij` item in `cmd/zide/install.go` with the node from `assets.ZellijKeys`; update the usage text and the README (`zide install` section and Zellij key section); verify the 9.2 and 9.3 tests pass and `make check` passes
+
 ## Workflow follow-up
 
 - Run `make check` before each commit.

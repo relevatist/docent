@@ -8,6 +8,9 @@ See proposal.md - Why. Facts checked on the target machine (Zellij 0.45.1):
 - `zellij action go-to-tab-by-id <id>` exists. It takes the `tab_id` from `list-panes` or `list-tabs --json` and makes that tab active. An unknown id (`99`) exits 0 and does nothing.
 - `zellij action new-tab --name t2` run from a `--floating --close-on-exit` pane makes the new tab active (`list-tabs --json` shows `"active": true` for it). When the command exits, the floating pane closes and is removed from the old tab. In `list-panes`, `is_focused` is per tab: the old tab's editor pane stays `is_focused: true`, so use `list-tabs --json` `active` to find the active tab.
 - Default keybinds use `Alt c f h i j k l n o p`. `Alt w` is free, and the user's `config.kdl` does not bind it.
+- Two top-level `keybinds` blocks in one `config.kdl`: Zellij uses only the first and ignores the second, with or without `clear-defaults=true`. `zellij setup --check` still says "Well defined", so it does not detect this. A second `shared_except "locked"` node inside the first `keybinds` block works: both nodes apply, also with `keybinds clear-defaults=true {`.
+- Config lookup (probed with `zellij setup --check` and a temp `HOME`; it prints `[CONFIG DIR]` and `[LOOKING FOR CONFIG FILE FROM]`): the file is `$ZELLIJ_CONFIG_FILE`, else `<config dir>/config.kdl`. The config dir is `$ZELLIJ_CONFIG_DIR` (used also when its `config.kdl` does not exist), else the first directory that exists of `~/.config/zellij`, the platform config dir, and `/etc/zellij`. Zellij checks that the directory exists, not the file. On macOS the platform dir is `~/Library/Application Support/org.Zellij-Contributors.Zellij`, and `XDG_CONFIG_HOME` is ignored. On Linux it is `$XDG_CONFIG_HOME/zellij` (default `~/.config/zellij`), from the `directories` crate (`find_default_config_dir` in `zellij-utils/src/setup.rs`).
+- `zellij --config <file> setup --check` exits 1 when the file does not parse.
 - `BurntSushi/toml` can only encode a whole file, so writing state into `config.toml` would drop user comments.
 - `internal/send.FormatRef` takes the kind from the base name of the first word of the pane command. `panes.Lookup` returns that command.
 
@@ -20,7 +23,7 @@ See proposal.md - Why. Facts checked on the target machine (Zellij 0.45.1):
 **Non-Goals:**
 - Creating directories or worktrees from the picker (the `workspace` spec forbids it).
 - Ranked fuzzy matching. A subsequence filter in list order is enough for a few hundred entries.
-- Editing the Zellij config.
+- Editing the Zellij config outside the marked node that `zide install zellij` manages.
 
 ## Decisions
 
@@ -122,6 +125,24 @@ keybinds {
 ```
 
 `zide new` opens the tab from inside the floating pane. Zellij focuses the new tab. The floating pane exits and closes in the old tab.
+
+`zide install zellij` adds the inner `shared_except "locked"` node of this asset (lines 2 to n-1, already indented 4 spaces) to the config, so the README snippet and the installed node come from one file:
+
+```kdl
+keybinds clear-defaults=true {
+    // zide: begin (managed by `zide install`)
+    shared_except "locked" {
+        ...
+    }
+    // zide: end
+    normal { ... }
+}
+```
+
+- Path: the Zellij lookup above. If the found dir is `/etc/zellij`, zide refuses, because a new `~/.config/zellij/config.kdl` would hide the system config. A symlinked config is resolved, so zide changes the target file and keeps the link.
+- Parse: a small line scanner blanks `//` and nested `/* */` comments outside strings and tracks the `{}` depth. Raw strings and `/-` comments make it refuse, with a message to add the snippet by hand. The first depth-0 line whose first word is `keybinds` must end with `{`, else zide refuses. No `keybinds` node: zide appends `keybinds {`, the node, and `}`.
+- Markers: one begin and one end line. Same content: no write. Other content: refuse without `--force`; with it, replace the lines between the markers. A `bind` line with `"Alt w"` outside the markers: refuse.
+- Check: all of this runs in `install.check`, with `zellij --config <temp file> setup --check`, so a refusal writes nothing for any item. `apply` writes `config.kdl.zide.bak`, then a temp file in the same directory with the old mode, then renames it.
 
 `close_on_exit` would hide errors and warnings, so on a terminal inside Zellij, after a non-zero exit or any printed output, `zide new` waits for `enter`. A read error of the recent list shows as a warning line in the picker.
 

@@ -14,7 +14,8 @@ To open a second workstream, the user must go to a shell pane, type `zide <path>
 - `zide send` takes the ref format from the alias `kind`, so wrapped commands (for example a sandbox) still get `@` refs.
 - zide finds open workstreams from the working directory (`pane_cwd`) of each tab's `editor` pane. If the chosen directory is already open in a tab, `zide new` asks to switch to that tab or open another one.
 - Fix: outside Zellij, the new session's tab is named `Tab #1`, because the layout `tab` node has no name. The layout now names the tab.
-- Ship a Zellij keybinding snippet (`Alt w`) in `assets/zellij/keys.kdl` and document it in the README. zide does not edit the Zellij config.
+- Ship a Zellij keybinding snippet (`Alt w`) in `assets/zellij/keys.kdl` and document it in the README.
+- `zide install` gets a `zellij` item (checked when `zellij` is on `PATH`) that adds the `Alt w` bind to the user's Zellij `config.kdl` as a marked node that zide manages.
 
 ## Capabilities
 
@@ -26,11 +27,13 @@ To open a second workstream, the user must go to a shell pane, type `zide <path>
 
 - `workspace`: harness aliases in the config, the harness kind marker, the tab name for a new session, and saving recent directories on launch.
 - `harness-input`: the ref format comes from the harness kind, not only from the command name.
+- `harness-integration`: `zide install` can install the Zellij `Alt w` key into the user's Zellij config.
 
 ## Impact
 
 - New code: `cmd/zide/new.go`, a picker model in `internal/tui`, a directory walk and recent state (new package `internal/recent` or in `internal/config`).
-- Changed code: `internal/config` (aliases, `roots`), `internal/launch` (harness kind marker, tab name in the layout), `internal/send` (kind), README, new `assets/zellij/keys.kdl`.
+- Changed code: `internal/config` (aliases, `roots`), `internal/launch` (harness kind marker, tab name in the layout), `internal/send` (kind), `cmd/zide/install.go` (the `zellij` item), README, new `assets/zellij/keys.kdl`.
 - The pane command shown by `list-panes` changes to `/usr/bin/env ZIDE_HARNESS_KIND=...` for the harness pane when an alias sets a `kind`. The editor pane stays `hx`.
 - After `:cd` in Helix, the editor pane cwd changes, so the picker no longer detects that tab for its first directory.
+- `zide install zellij` edits the user's Zellij `config.kdl`. It keeps a backup (`config.kdl.zide.bak`) and changes only the marked node.
 - No new dependencies.
