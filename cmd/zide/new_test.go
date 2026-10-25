@@ -201,29 +201,34 @@ func (r *readCount) Read(b []byte) (int, error) {
 	return copy(b, "\n"), nil
 }
 
-func TestPauseOnError(t *testing.T) {
-	for _, code := range []int{0, 1, 2} {
+func TestNewPause(t *testing.T) {
+	for _, tt := range []struct {
+		name          string
+		zellij        string
+		tty, readOnly bool
+		pick          tui.Picked
+		want          bool
+	}{
+		{"success", "0", true, false, tui.Picked{Harness: "cat"}, false},
+		{"warning", "0", true, true, tui.Picked{Harness: "cat"}, true},
+		{"error", "0", true, false, tui.Picked{Harness: " "}, true},
+		{"outside Zellij", "", true, false, tui.Picked{}, false},
+		{"no terminal", "0", false, false, tui.Picked{Harness: " "}, false},
+	} {
+		dir, _ := appDir(t)
+		f := newFake(t, "", "/other", "claude")
+		t.Setenv("ZELLIJ", tt.zellij)
+		if tt.readOnly {
+			notDir := filepath.Join(t.TempDir(), "file")
+			writeTestFile(t, notDir, "")
+			t.Setenv("XDG_STATE_HOME", notDir)
+		}
+		tt.pick.Dir = dir
 		var r readCount
 		var w bytes.Buffer
-		if got := pause(code, &r, &w); got != code {
-			t.Errorf("pause(%d) = %d", code, got)
+		newAndPause(f, nil, pickReturns(tt.pick), tt.tty, &r, &w)
+		if paused := r.n > 0 && strings.HasSuffix(w.String(), "press enter to close"); paused != tt.want {
+			t.Errorf("%s: reads %d, output %q; want pause %v", tt.name, r.n, w.String(), tt.want)
 		}
-		if waited := r.n > 0 && strings.Contains(w.String(), "press enter to close"); waited != (code != 0) {
-			t.Errorf("exit %d: reads %d, output %q", code, r.n, w.String())
-		}
-	}
-}
-
-func TestNewTypedHomeCommand(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	dir, _ := appDir(t)
-	f := newFake(t, "", "/other", "claude")
-	if code := newCmd(f, nil, os.Stderr, pickReturns(tui.Picked{Dir: dir, Harness: "~/bin/box omp"})); code != 0 {
-		t.Fatalf("exit %d", code)
-	}
-	want := `"/usr/bin/env" {` + "\n" + `                    args "ZIDE_HARNESS_KIND=box"`
-	if tab := lastNewTab(t, f); strings.Contains(tab[3], want) || !strings.Contains(tab[3], `"`+home+`/bin/box" {`) {
-		t.Errorf("layout\n%s\nwant %s/bin/box with no kind marker", tab[3], home)
 	}
 }

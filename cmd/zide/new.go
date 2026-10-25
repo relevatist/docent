@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"flag"
 	"fmt"
@@ -23,19 +24,18 @@ import (
 type pickerFunc func(tui.PickerInput) (tui.Picked, bool, error)
 
 func runNew(args []string) int {
-	code := newCmd(zellij.Exec{}, args, os.Stderr, tui.PickWorkstream)
-	if isTerminal(os.Stdin) {
-		return pause(code, os.Stdin, os.Stderr)
-	}
-	return code
+	return newAndPause(zellij.Exec{}, args, tui.PickWorkstream, isTerminal(os.Stdin), os.Stdin, os.Stderr)
 }
 
-// pause waits for enter after a non-zero exit, so that the error stays on
+// newAndPause runs newCmd. On a terminal inside Zellij, it then waits for
+// enter when newCmd failed or printed anything, so that the output stays on
 // screen in a floating pane that closes on exit.
-func pause(code int, r io.Reader, w io.Writer) int {
-	if code != 0 {
+func newAndPause(r zellij.Runner, args []string, pick pickerFunc, tty bool, in io.Reader, w io.Writer) int {
+	var out bytes.Buffer
+	code := newCmd(r, args, io.MultiWriter(w, &out), pick)
+	if tty && os.Getenv("ZELLIJ") != "" && (code != 0 || out.Len() > 0) {
 		_, _ = fmt.Fprint(w, "press enter to close")
-		_, _ = bufio.NewReader(r).ReadString('\n')
+		_, _ = bufio.NewReader(in).ReadString('\n')
 	}
 	return code
 }

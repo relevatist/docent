@@ -123,7 +123,7 @@ keybinds {
 
 `zide new` opens the tab from inside the floating pane. Zellij focuses the new tab. The floating pane exits and closes in the old tab.
 
-`close_on_exit` would hide errors, so on a non-zero exit on a terminal `zide new` prints the error and waits for `enter`. A read error of the recent list shows as a warning line in the picker.
+`close_on_exit` would hide errors and warnings, so on a terminal inside Zellij, after a non-zero exit or any printed output, `zide new` waits for `enter`. A read error of the recent list shows as a warning line in the picker.
 
 ## Risks / Trade-offs
 
