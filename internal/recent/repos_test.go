@@ -108,3 +108,39 @@ func TestReposSymlinkRoot(t *testing.T) {
 		t.Errorf("Repos = %q; want %q", got, want)
 	}
 }
+
+func TestDirs(t *testing.T) {
+	home := t.TempDir()
+	tree(t, home,
+		"src/app/.git/",
+		"src/app/internal/",
+		"src/app/node_modules/x/",
+		".cache/x/",
+		"Library/Caches/",
+		"notes/Library/",
+		"notes/readme",
+	)
+	got := slices.Collect(Dirs(t.Context(), home))
+	want := []string{home}
+	for _, d := range []string{"notes", "notes/Library", "src", "src/app", "src/app/internal"} {
+		want = append(want, filepath.Join(home, d))
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("Dirs = %q; want %q", got, want)
+	}
+}
+
+func TestDirsCancel(t *testing.T) {
+	home := t.TempDir()
+	tree(t, home, "a/", "b/")
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	var got []string
+	for d := range Dirs(ctx, home) {
+		got = append(got, d)
+		cancel()
+	}
+	if want := []string{home}; !slices.Equal(got, want) {
+		t.Errorf("Dirs after cancel = %q; want %q", got, want)
+	}
+}
