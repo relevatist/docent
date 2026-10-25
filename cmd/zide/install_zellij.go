@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strings"
 
 	"github.com/relevatist/zide/assets"
@@ -22,9 +23,12 @@ const (
 
 var (
 	systemZellijDir = "/etc/zellij"
+	goos            = runtime.GOOS
 	errByHand       = errors.New(`zide cannot find where to add the key; add the shared_except "locked" node from assets/zellij/keys.kdl to the keybinds block by hand`)
+	errMarkers      = errors.New("more than one zide marker, or markers out of order")
 	keybindsLine    = regexp.MustCompile(`^keybinds([\s{]|$)`)
-	altWBind        = regexp.MustCompile(`\bbind\b.*"Alt w"`)
+	keybindsName    = regexp.MustCompile(`(^|[;{}])\s*"?keybinds"?([\s;{}]|$)`)
+	altWBind        = regexp.MustCompile(`\bbind(\s+"[^"]*")*\s+"\s*(?i:alt)\s+w\s*"`)
 )
 
 // zellijNode is the shared_except node inside the keybinds block of
@@ -57,7 +61,7 @@ func zellijConfigPath(home string) (string, error) {
 
 // platformZellijDir is the config dir of the Rust directories crate.
 func platformZellijDir(home string) string {
-	if runtime.GOOS == "darwin" {
+	if goos == "darwin" {
 		return filepath.Join(home, "Library/Application Support/org.Zellij-Contributors.Zellij")
 	}
 	if x := os.Getenv("XDG_CONFIG_HOME"); filepath.IsAbs(x) {
@@ -69,29 +73,46 @@ func platformZellijDir(home string) string {
 // editZellijConfig returns cfg with the marked zide node in its first
 // top-level keybinds block.
 func editZellijConfig(cfg string, force bool) (string, error) {
+	cfg, bom := strings.CutPrefix(cfg, "\ufeff")
+	out, err := editZellijCode(cfg, force)
+	if bom && err == nil {
+		out = "\ufeff" + out
+	}
+	return out, err
+}
+
+func editZellijCode(cfg string, force bool) (string, error) {
 	block := zellijBegin + zellijNode() + zellijEnd
-	code, depth, ok := kdlCode(cfg)
+	code, depth, open, ok := kdlCode(cfg)
 	if !ok {
 		return "", errByHand
 	}
 	lines := strings.SplitAfter(cfg, "\n")
-	begin, end := -1, -1
+	begin, end, hidden := -1, -1, false
 	for i, l := range lines {
+		var at *int
 		switch strings.TrimSpace(l) {
 		case strings.TrimSpace(zellijBegin):
-			if begin >= 0 {
-				return "", errByHand
-			}
-			begin = i
+			at = &begin
 		case strings.TrimSpace(zellijEnd):
-			if end >= 0 {
-				return "", errByHand
-			}
-			end = i
+			at = &end
+		default:
+			continue
 		}
+		if i > 0 && open[i-1] {
+			hidden = true
+			continue
+		}
+		if *at >= 0 {
+			return "", errMarkers
+		}
+		*at = i
 	}
-	if (begin < 0) != (end < 0) || end < begin {
+	switch {
+	case begin < 0 && end < 0 && hidden, (begin < 0) != (end < 0):
 		return "", errByHand
+	case end < begin:
+		return "", errMarkers
 	}
 	keybinds := -1
 	for i, c := range code {
@@ -99,37 +120,61 @@ func editZellijConfig(cfg string, force bool) (string, error) {
 			continue
 		}
 		if altWBind.MatchString(c) {
+			if isAssetBind(lines[i:]) {
+				return "", fmt.Errorf(`"Alt w" is already bound by the zide snippet, added by hand (%s); remove it so that zide can manage it`, strings.TrimSpace(lines[i]))
+			}
 			return "", fmt.Errorf(`"Alt w" is already bound (%s); remove that bind first`, strings.TrimSpace(lines[i]))
 		}
-		if keybinds < 0 && depth[i] == 0 && keybindsLine.MatchString(strings.TrimSpace(c)) {
+		if keybinds < 0 && keybindsName.MatchString(c) {
 			keybinds = i
 		}
 	}
 	join := func(ls []string) string { return strings.Join(ls, "") }
+	// eol returns s with the line ending of l.
+	eol := func(s, l string) string {
+		if strings.HasSuffix(l, "\r\n") {
+			return strings.ReplaceAll(s, "\n", "\r\n")
+		}
+		return s
+	}
 	switch {
 	case begin >= 0:
-		if join(lines[begin:end+1]) == block {
+		if strings.ReplaceAll(join(lines[begin:end+1]), "\r", "") == block {
 			return cfg, nil
 		}
 		if !force {
 			return "", errors.New("the zide key node has changes; use --force to overwrite")
 		}
-		return join(lines[:begin]) + block + join(lines[end+1:]), nil
+		return join(lines[:begin]) + eol(block, lines[begin]) + join(lines[end+1:]), nil
 	case keybinds < 0:
+		nl := eol("\n", lines[0])
 		if cfg != "" && !strings.HasSuffix(cfg, "\n") {
-			cfg += "\n"
+			cfg += nl
 		}
-		return cfg + "keybinds {\n" + block + "}\n", nil
-	case !strings.HasSuffix(strings.TrimSpace(code[keybinds]), "{") || !strings.HasSuffix(lines[keybinds], "\n"):
+		return cfg + eol("keybinds {\n"+block+"}\n", nl), nil
+	case depth[keybinds] != 0 || open[keybinds] || !strings.HasSuffix(lines[keybinds], "\n"),
+		!keybindsLine.MatchString(strings.TrimSpace(code[keybinds])),
+		!strings.HasSuffix(strings.TrimSpace(code[keybinds]), "{"):
 		return "", errByHand
 	}
-	return join(lines[:keybinds+1]) + block + join(lines[keybinds+1:]), nil
+	return join(lines[:keybinds+1]) + eol(block, lines[keybinds]) + join(lines[keybinds+1:]), nil
 }
 
-// kdlCode returns the lines of cfg with comments blanked out, and the brace
-// depth at the start of each line. ok is false for KDL that it does not
+// isAssetBind reports whether ls starts with the bind node of
+// assets/zellij/keys.kdl.
+func isAssetBind(ls []string) bool {
+	want := strings.Split(strings.TrimSuffix(zellijNode(), "\n"), "\n")
+	want = want[1 : len(want)-1]
+	return len(ls) >= len(want) && slices.EqualFunc(ls[:len(want)], want, func(a, b string) bool {
+		return strings.TrimSpace(a) == strings.TrimSpace(b)
+	})
+}
+
+// kdlCode returns the lines of cfg with comments blanked out, the brace
+// depth at the start of each line, and whether each line ends inside a
+// comment or a string. ok is false for KDL that it does not
 // handle: raw strings, `/-` comments, and an unclosed comment or string.
-func kdlCode(cfg string) (lines []string, depth []int, ok bool) {
+func kdlCode(cfg string) (lines []string, depth []int, open []bool, ok bool) {
 	var b strings.Builder
 	depth = []int{0}
 	d, comment, inString := 0, 0, false
@@ -141,6 +186,7 @@ func kdlCode(cfg string) (lines []string, depth []int, ok bool) {
 		switch {
 		case c == '\n':
 			depth = append(depth, d)
+			open = append(open, comment > 0 || inString)
 		case comment > 0:
 			if c == '*' && next == '/' || c == '/' && next == '*' {
 				if c == '*' {
@@ -174,7 +220,7 @@ func kdlCode(cfg string) (lines []string, depth []int, ok bool) {
 			b.WriteString("  ")
 			continue
 		case c == '/' && next == '-', c == 'r' && (next == '"' || next == '#'), c == '#' && next == '"':
-			return nil, nil, false
+			return nil, nil, nil, false
 		case c == '{':
 			d++
 		case c == '}':
@@ -183,9 +229,9 @@ func kdlCode(cfg string) (lines []string, depth []int, ok bool) {
 		b.WriteByte(c)
 	}
 	if comment > 0 || inString {
-		return nil, nil, false
+		return nil, nil, nil, false
 	}
-	return strings.Split(b.String(), "\n"), depth, true
+	return strings.Split(b.String(), "\n"), depth, append(open, false), true
 }
 
 // checkZellijConfig runs `zellij setup --check` on cfg in a temp file.
@@ -231,7 +277,9 @@ func (z *zellijTarget) check(force bool) string {
 		return err.Error()
 	}
 	z.old, z.exists = string(old), err == nil
-	if z.data, err = editZellijConfig(z.old, force); err != nil {
+	if z.data, err = editZellijConfig(z.old, force); errors.Is(err, errMarkers) {
+		return fmt.Sprintf("%v; fix %s by hand", err, path)
+	} else if err != nil {
 		return path + ": " + err.Error()
 	}
 	if z.exists && z.data == z.old {

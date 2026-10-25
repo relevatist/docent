@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -48,6 +49,12 @@ func TestEditZellijConfig(t *testing.T) {
 		{"no keybinds node", "theme \"x\"", "theme \"x\"\nkeybinds {\n" + block + "}\n"},
 		{"Alt w in a comment", "// bind \"Alt w\" {}\nkeybinds {\n}\n", "// bind \"Alt w\" {}\nkeybinds {\n" + block + "}\n"},
 		{"braces in a string", "x \"{\"\nkeybinds {\n}\n", "x \"{\"\nkeybinds {\n" + block + "}\n"},
+		{"BOM", "\ufeffkeybinds {\n}\n", "\ufeffkeybinds {\n" + block + "}\n"},
+		{"CRLF", "keybinds {\r\n}\r\n", "keybinds {\r\n" + crlf(block) + "}\r\n"},
+		{"CRLF same content", "keybinds {\r\n" + crlf(block) + "}\r\n", "keybinds {\r\n" + crlf(block) + "}\r\n"},
+		{"CRLF no keybinds node", "theme \"x\"\r\n", "theme \"x\"\r\n" + crlf("keybinds {\n"+block+"}\n")},
+		{"comment after the brace", "keybinds { // mine\n}\n", "keybinds { // mine\n" + block + "}\n"},
+		{"Alt W is another key", "keybinds {\n    bind \"Alt W\" {}\n}\n", "keybinds {\n" + block + "    bind \"Alt W\" {}\n}\n"},
 	} {
 		got, err := editZellijConfig(tc.cfg, false)
 		if err != nil {
@@ -71,12 +78,27 @@ func TestEditZellijConfigRefused(t *testing.T) {
 		{"Alt w bound", "keybinds {\n    normal {\n        bind \"Alt w\" { NewPane; }\n    }\n}\n", `bind "Alt w"`},
 		{"marked node changed", "keybinds {\n" + changed + "}\n", "--force"},
 		{"begin without end", "keybinds {\n    // zide: begin (managed by `zide install`)\n}\n", "by hand"},
+		{"KDL v2 raw string", "keybinds {\n}\nx #\"a\"#\n", "by hand"},
+		{"block comment opens on the keybinds line", "keybinds { /*\n*/\n}\n", "by hand"},
+		{"string opens on the keybinds line", "keybinds { x \"{\n}\"\n}\n", "by hand"},
+		{"keybinds after another node", "theme \"x\"; keybinds {\n}\n", "by hand"},
+		{"quoted keybinds", "\"keybinds\" {\n}\n", "by hand"},
+		{"BOM and keybinds after another node", "\ufefftheme \"x\"; keybinds {\n}\n", "by hand"},
+		{"markers only in a block comment", "keybinds {\n/*\n" + managed(zellijNode()) + "*/\n}\n", "by hand"},
+		{"two begin markers", "keybinds {\n" + managed(zellijNode()) + managed(zellijNode()) + "}\n", "markers out of order"},
+		{"markers out of order", "keybinds {\n" + zellijEnd + zellijBegin + "}\n", "markers out of order"},
+		{"alt w bound", "keybinds {\n    bind \"alt w\" { NewPane; }\n}\n", "already bound"},
+		{"ALT  w bound", "keybinds {\n    bind \"ALT  w\" { NewPane; }\n}\n", "already bound"},
+		{"Alt w second key", "keybinds {\n    bind \"Alt x\" \"Alt w\" { NewPane; }\n}\n", "already bound"},
+		{"snippet added by hand", assets.ZellijKeys, "added by hand"},
 	} {
 		if _, err := editZellijConfig(tc.cfg, false); err == nil || !strings.Contains(err.Error(), tc.msg) {
 			t.Errorf("%s: err = %v; want it to contain %q", tc.name, err, tc.msg)
 		}
 	}
 }
+
+func crlf(s string) string { return strings.ReplaceAll(s, "\n", "\r\n") }
 
 func TestEditZellijConfigForce(t *testing.T) {
 	block := managed(zellijNode())
@@ -120,6 +142,22 @@ func TestZellijConfigPath(t *testing.T) {
 	check("ZELLIJ_CONFIG_DIR", filepath.Join(dir, "config.kdl"))
 	t.Setenv("ZELLIJ_CONFIG_FILE", "/x/my.kdl")
 	check("ZELLIJ_CONFIG_FILE", "/x/my.kdl")
+}
+
+func TestPlatformZellijDir(t *testing.T) {
+	t.Cleanup(func() { goos = runtime.GOOS })
+	for _, tc := range []struct{ goos, xdg, want string }{
+		{"darwin", "/xdg", "/h/Library/Application Support/org.Zellij-Contributors.Zellij"},
+		{"linux", "/xdg", "/xdg/zellij"},
+		{"linux", "xdg", "/h/.config/zellij"},
+		{"linux", "", "/h/.config/zellij"},
+	} {
+		goos = tc.goos
+		t.Setenv("XDG_CONFIG_HOME", tc.xdg)
+		if got := platformZellijDir("/h"); got != tc.want {
+			t.Errorf("%s, XDG_CONFIG_HOME=%q: got %q, want %q", tc.goos, tc.xdg, got, tc.want)
+		}
+	}
 }
 
 // fakeZellij replaces the fake zellij command with one that records its
@@ -206,6 +244,7 @@ func TestInstallZellijRefused(t *testing.T) {
 	}{
 		{"Alt w bound", "keybinds {\n    bind \"Alt w\" { NewPane; }\n}\n", "0", `bind "Alt w"`},
 		{"check fails", userConfig, "1", "bad config"},
+		{"markers out of order", "keybinds {\n" + zellijEnd + zellijBegin + "}\n", "0", "markers out of order; fix"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			home := tempHome(t)
