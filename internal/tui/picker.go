@@ -1,32 +1,30 @@
 package tui
 
 import (
+	"bytes"
 	"cmp"
 	"context"
+	"errors"
+	"fmt"
+	"io"
+	"iter"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
-	"time"
-	"unicode/utf8"
-
-	tea "charm.land/bubbletea/v2"
+	"unicode"
 
 	"github.com/relevatist/zide/internal/recent"
-)
-
-const (
-	pickerHelp  = "tab: field  up/down: move or cycle  enter: open  esc: cancel"
-	openTabHelp = "up/down: move  enter: choose  esc: back"
 )
 
 // PickerInput is what the workstream picker starts with.
 type PickerInput struct {
 	Recent  []string // absolute directories, most recent first
-	Roots   []string // searched for git repos after the picker shows
-	Harness string   // first value of the harness field
+	Roots   []string // searched for git repos while the picker shows
+	Harness string   // the harness to use unless the user picks another
 	Aliases []string // config harness alias names, in any order
-	Warning string   // shown under the fields
+	Warning string   // shown in the header
 	// IsOpen returns the name of a tab that has dir open.
 	IsOpen func(dir string) (tab string, ok bool)
 }
@@ -47,324 +45,176 @@ type Picked struct {
 	Action  Action
 }
 
-// PickWorkstream shows the picker. ok is false when the user cancels.
+// fzfFunc runs fzf with args and the lines of in as input. It returns the
+// output lines and the exit code.
+type fzfFunc func(args []string, in iter.Seq[string]) ([]string, int, error)
+
+// PickWorkstream shows the picker in fzf. ok is false when the user cancels.
 func PickWorkstream(in PickerInput) (Picked, bool, error) {
-	return pickWorkstream(in, func(m tea.Model) error {
-		_, err := tea.NewProgram(m).Run()
-		return err
-	})
+	if _, err := exec.LookPath("fzf"); err != nil {
+		return Picked{}, false, errors.New("fzf is not on PATH")
+	}
+	return pickWorkstream(in, runFzf)
 }
 
-func pickWorkstream(in PickerInput, run func(tea.Model) error) (Picked, bool, error) {
-	p := newPickerModel(in)
-	defer p.stop()
-	if err := run(p); err != nil {
+func pickWorkstream(in PickerInput, fzf fzfFunc) (Picked, bool, error) {
+	home, _ := os.UserHomeDir()
+	if home != "" {
+		home = filepath.Clean(home)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	header := "enter: open with " + in.Harness + "  alt-enter: choose harness  esc: cancel"
+	if in.Warning != "" {
+		header += "\nwarning: " + in.Warning
+	}
+	out, ok, err := step(fzf, dirLines(ctx, in, home), "dir", header, "--scheme=path", "--print-query", "--expect=alt-enter")
+	cancel()
+	if !ok {
 		return Picked{}, false, err
 	}
-	picked, ok := p.result()
-	return picked, ok, nil
-}
-
-// reposMsg is a batch of walk hits. done marks the end of the walk.
-type reposMsg struct {
-	dirs []string
-	done bool
-}
-
-type picker struct {
-	in             PickerInput
-	home           string
-	dirs           []string
-	seen           map[string]bool // the dirs, for dedup
-	walking        bool
-	query, harness string
-	onHarness      bool
-	cur            int
-	err            string
-	openTab        string // set on the open-tab screen
-	another        bool   // the open-tab screen choice
-	picked         Picked
-	done           bool
-	height         int
-	hits           <-chan string
-	ctx            context.Context
-	stop           func()        // cancels the walk
-	walked         chan struct{} // closed when the walk goroutine returns
-}
-
-func newPickerModel(in PickerInput) *picker {
-	home, _ := os.UserHomeDir()
-	ctx, cancel := context.WithCancel(context.Background())
-	p := &picker{
-		in:      in,
-		home:    home,
-		dirs:    recent.Candidates(in.Recent),
-		seen:    map[string]bool{},
-		walking: len(in.Roots) > 0,
-		harness: in.Harness,
-		ctx:     ctx,
-		stop:    cancel,
+	query, key, sel := at(out, 0), at(out, 1), at(out, 2)
+	dir, isDir := typedDir(query, home)
+	if !isDir {
+		if query == "" && sel == "" {
+			return Picked{}, false, nil
+		}
+		dir, isDir = typedDir(cmp.Or(sel, query), home)
 	}
-	for _, d := range p.dirs {
-		p.seen[d] = true
+	if !isDir {
+		return Picked{}, false, fmt.Errorf("no directory for %q", cmp.Or(sel, query))
 	}
-	return p
+	p := Picked{Dir: dir, Harness: in.Harness}
+
+	if key == "alt-enter" {
+		out, ok, err := step(fzf, slices.Values(harnesses(in)), "harness", "enter: choose, or use the typed command when nothing matches  esc: cancel", "--print-query")
+		if !ok {
+			return Picked{}, false, err
+		}
+		// fzf matches each word on its own, so typed text with spaces is a command.
+		query := strings.TrimSpace(at(out, 0))
+		p.Harness = strings.TrimSpace(cmp.Or(at(out, 1), query))
+		if strings.ContainsFunc(query, unicode.IsSpace) {
+			p.Harness = query
+		}
+		if p.Harness == "" {
+			return Picked{}, false, errors.New("harness is empty")
+		}
+	}
+
+	if in.IsOpen == nil {
+		return p, true, nil
+	}
+	tab, isOpen := in.IsOpen(dir)
+	if !isOpen {
+		return p, true, nil
+	}
+	switchTo, another := "switch to tab "+safe(cmp.Or(tab, "?")), "open another tab"
+	out, ok, err = step(fzf, slices.Values([]string{switchTo, another}), "", tilde(dir, home)+" is open", "--no-input")
+	if !ok {
+		return Picked{}, false, err
+	}
+	p.Action = Switch
+	if at(out, 0) == another {
+		p.Action = Another
+	}
+	return p, true, nil
 }
 
-func (p *picker) Init() tea.Cmd {
-	if !p.walking {
-		return nil
+// step runs one fzf screen. ok is false when the user cancels or fzf fails.
+func step(fzf fzfFunc, in iter.Seq[string], prompt, header string, args ...string) (out []string, ok bool, err error) {
+	args = append(args, "--layout=reverse", "--prompt="+prompt+"> ", "--header="+safeHeader(header))
+	out, code, err := fzf(args, in)
+	switch {
+	case err != nil:
+		return nil, false, err
+	case code == 130:
+		return nil, false, nil
+	case code != 0 && code != 1: // 1 is no match
+		return nil, false, fmt.Errorf("fzf exited with code %d", code)
 	}
-	hits, walked := make(chan string), make(chan struct{})
+	return out, true, nil
+}
+
+// safeHeader is safe(s) with its newlines kept.
+func safeHeader(s string) string {
+	lines := strings.Split(s, "\n")
+	for i := range lines {
+		lines[i] = safe(lines[i])
+	}
+	return strings.Join(lines, "\n")
+}
+
+func at(lines []string, i int) string {
+	if i < len(lines) {
+		return lines[i]
+	}
+	return ""
+}
+
+// dirLines yields the recent directories, the repos under the roots, and
+// each directory under home, each once, as absolute paths written as ~/...
+// It drops paths that
+// have control characters, as fzf output could not give them back.
+func dirLines(ctx context.Context, in PickerInput, home string) iter.Seq[string] {
+	return func(yield func(string) bool) {
+		seqs := []iter.Seq[string]{slices.Values(recent.Candidates(in.Recent)), recent.Repos(ctx, in.Roots)}
+		if home != "" {
+			seqs = append(seqs, recent.Dirs(ctx, home))
+		}
+		seen := map[string]bool{}
+		for _, seq := range seqs {
+			for d := range seq {
+				d, err := filepath.Abs(d)
+				if err != nil || seen[d] || safe(d) != d || strings.Contains(d, "\t") {
+					continue
+				}
+				seen[d] = true
+				if !yield(tilde(d, home)) {
+					return
+				}
+			}
+		}
+	}
+}
+
+// runFzf runs fzf with the lines of in on its stdin. It stops reading in when
+// fzf exits.
+func runFzf(args []string, in iter.Seq[string]) ([]string, int, error) {
+	cmd := exec.Command("fzf", args...)
+	var out bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &out, os.Stderr
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, 0, err
+	}
+	if err := cmd.Start(); err != nil {
+		return nil, 0, err
+	}
 	go func() {
-		defer close(walked)
-		defer close(hits)
-		for d := range recent.Repos(p.ctx, p.in.Roots) {
-			select {
-			case hits <- d:
-			case <-p.ctx.Done():
+		defer func() { _ = stdin.Close() }()
+		for l := range in {
+			if _, err := io.WriteString(stdin, l+"\n"); err != nil {
 				return
 			}
 		}
 	}()
-	p.hits, p.walked = hits, walked
-	return p.next
+	err = cmd.Wait()
+	code := 0
+	if ee, ok := errors.AsType[*exec.ExitError](err); ok {
+		code, err = ee.ExitCode(), nil
+	}
+	return strings.Split(strings.TrimSuffix(out.String(), "\n"), "\n"), code, err
 }
 
-// next returns the next batch of hits: up to 100, or those that come in 50ms
-// after the first.
-func (p *picker) next() tea.Msg {
-	d, ok := <-p.hits
-	if !ok {
-		return reposMsg{done: true}
-	}
-	batch := []string{d}
-	timeout := time.After(50 * time.Millisecond)
-	for len(batch) < 100 {
-		select {
-		case d, ok := <-p.hits:
-			if !ok {
-				return reposMsg{batch, true}
-			}
-			batch = append(batch, d)
-		case <-timeout:
-			return reposMsg{dirs: batch}
-		}
-	}
-	return reposMsg{dirs: batch}
-}
-
-func (p *picker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		p.height = msg.Height
-	case reposMsg:
-		for _, d := range msg.dirs {
-			if !p.seen[d] {
-				p.seen[d] = true
-				p.dirs = append(p.dirs, d)
-			}
-		}
-		if msg.done {
-			p.walking = false
-			return p, nil
-		}
-		return p, p.next
-	case tea.PasteMsg:
-		if p.openTab == "" {
-			text := strings.NewReplacer("\r", "", "\n", "").Replace(msg.Content)
-			p.edit(func(s string) string { return s + text })
-		}
-	case tea.KeyPressMsg:
-		if msg.String() == "ctrl+c" {
-			return p, tea.Quit
-		}
-		if p.openTab != "" {
-			return p, p.openTabKey(msg)
-		}
-		return p, p.key(msg)
-	}
-	return p, nil
-}
-
-func (p *picker) key(k tea.KeyPressMsg) tea.Cmd {
-	p.err = ""
-	switch k.String() {
-	case "esc":
-		return tea.Quit
-	case "tab", "shift+tab":
-		p.onHarness = !p.onHarness
-	case "up", "ctrl+p":
-		p.move(-1)
-	case "down", "ctrl+n":
-		p.move(1)
-	case "backspace":
-		p.edit(func(s string) string {
-			_, n := utf8.DecodeLastRuneInString(s)
-			return s[:len(s)-n]
-		})
-	case "enter":
-		return p.confirm()
-	default:
-		if k.Text != "" {
-			p.edit(func(s string) string { return s + k.Text })
-		}
-	}
-	return nil
-}
-
-// edit sets the focused field to f(field). A query edit resets the selection.
-func (p *picker) edit(f func(string) string) {
-	if p.onHarness {
-		p.harness = f(p.harness)
-		return
-	}
-	p.query, p.cur = f(p.query), 0
-}
-
-func (p *picker) move(step int) {
-	if !p.onHarness {
-		p.cur = max(min(p.cur+step, len(p.matches())-1), 0)
-		return
-	}
-	hs := p.harnesses()
-	i := slices.Index(hs, p.harness)
-	if i < 0 && step < 0 {
-		i = 0
-	}
-	p.harness = hs[(i+step+len(hs))%len(hs)]
-}
-
-// harnesses returns the harness field values in cycle order, each once.
-func (p *picker) harnesses() []string {
+// harnesses returns the harness candidates in order, each once.
+func harnesses(in PickerInput) []string {
 	var hs []string
-	for _, h := range slices.Concat([]string{p.in.Harness}, slices.Sorted(slices.Values(p.in.Aliases)), []string{"claude", "omp", "codex"}) {
+	for _, h := range slices.Concat([]string{in.Harness}, slices.Sorted(slices.Values(in.Aliases)), []string{"claude", "omp", "codex"}) {
 		if h != "" && !slices.Contains(hs, h) {
 			hs = append(hs, h)
 		}
 	}
 	return hs
-}
-
-func (p *picker) confirm() tea.Cmd {
-	m := p.matches()
-	switch {
-	case len(m) == 0:
-		p.err = "no directory to open"
-		return nil
-	case strings.TrimSpace(p.harness) == "":
-		p.err = "harness is empty"
-		return nil
-	}
-	p.picked = Picked{Dir: m[p.cur], Harness: strings.TrimSpace(p.harness)}
-	if p.in.IsOpen != nil {
-		if tab, ok := p.in.IsOpen(p.picked.Dir); ok {
-			p.openTab, p.another = cmp.Or(tab, "?"), false
-			return nil
-		}
-	}
-	p.done = true
-	return tea.Quit
-}
-
-func (p *picker) openTabKey(k tea.KeyPressMsg) tea.Cmd {
-	switch k.String() {
-	case "esc":
-		p.openTab = ""
-	case "up", "down", "ctrl+p", "ctrl+n":
-		p.another = !p.another
-	case "enter":
-		p.picked.Action, p.done = Switch, true
-		if p.another {
-			p.picked.Action = Another
-		}
-		return tea.Quit
-	}
-	return nil
-}
-
-func (p *picker) matches() []string {
-	return filter(p.dirs, p.query, p.home)
-}
-
-func (p *picker) View() tea.View {
-	var lines []string
-	if p.openTab != "" {
-		lines = []string{
-			safe(tilde(p.picked.Dir, p.home)) + " is open in tab " + bold.Render(safe(p.openTab)) + ".",
-			choice(!p.another, "switch to that tab"),
-			choice(p.another, "open another tab"),
-			faint.Render(openTabHelp),
-		}
-		return tea.NewView(strings.Join(lines, "\n") + "\n")
-	}
-	lines = append(lines, field("dir: ", p.query, !p.onHarness))
-	m := p.matches()
-	room := len(m)
-	if p.height > 0 {
-		room = max(p.height-5, 1)
-	}
-	start := max(p.cur-room+1, 0)
-	for i := start; i < min(start+room, len(m)); i++ {
-		l := choice(i == p.cur, safe(tilde(m[i], p.home)))
-		if slices.Contains(p.in.Recent, m[i]) {
-			l += faint.Render("  recent")
-		}
-		lines = append(lines, l)
-	}
-	switch {
-	case p.walking:
-		lines = append(lines, faint.Render("  searching roots..."))
-	case len(p.dirs) == 0 && len(p.in.Roots) == 0:
-		lines = append(lines, faint.Render("  No directories. Set roots in the zide config to list git repos."))
-	}
-	lines = append(lines, field("harness: ", p.harness, p.onHarness))
-	if p.in.Warning != "" {
-		lines = append(lines, removed.Render("warning: "+safe(p.in.Warning)))
-	}
-	if p.err != "" {
-		lines = append(lines, removed.Render(p.err))
-	}
-	lines = append(lines, faint.Render(pickerHelp))
-	return tea.NewView(strings.Join(lines, "\n") + "\n")
-}
-
-func field(label, value string, focused bool) string {
-	if focused {
-		return bold.Render(label) + safe(value) + "_"
-	}
-	return faint.Render(label) + safe(value)
-}
-
-func choice(selected bool, s string) string {
-	if selected {
-		return "> " + bold.Render(s)
-	}
-	return "  " + s
-}
-
-func (p *picker) result() (Picked, bool) {
-	if !p.done {
-		return Picked{}, false
-	}
-	return p.picked, true
-}
-
-// filter returns the dirs whose display path (see tilde) holds the runes of q
-// in order, ignoring case. When q is a path to a directory, that directory
-// comes first, once.
-func filter(dirs []string, q, home string) []string {
-	var out []string
-	typed, ok := typedDir(q, home)
-	if ok {
-		out = append(out, typed)
-	}
-	for _, d := range dirs {
-		if (!ok || d != typed) && subsequence(strings.ToLower(tilde(d, home)), strings.ToLower(q)) {
-			out = append(out, d)
-		}
-	}
-	return out
 }
 
 // typedDir returns q as an absolute path when it is a path to a directory.
@@ -388,17 +238,6 @@ func typedDir(q, home string) (string, bool) {
 	}
 	fi, err := os.Stat(q)
 	return q, err == nil && fi.IsDir()
-}
-
-func subsequence(s, q string) bool {
-	for _, r := range q {
-		i := strings.IndexRune(s, r)
-		if i < 0 {
-			return false
-		}
-		s = s[i+utf8.RuneLen(r):]
-	}
-	return true
 }
 
 // tilde writes a path under home as ~/...

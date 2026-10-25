@@ -1,79 +1,14 @@
 package tui
 
 import (
+	"iter"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
-	"time"
-
-	tea "charm.land/bubbletea/v2"
 )
-
-func TestFilter(t *testing.T) {
-	home := t.TempDir()
-	retry, lib, x := filepath.Join(home, "wt/retry/app"), filepath.Join(home, "src/lib"), filepath.Join(home, "x")
-	for _, d := range []string{lib, x} {
-		if err := os.MkdirAll(d, 0o755); err != nil {
-			t.Fatal(err)
-		}
-	}
-	src := filepath.Dir(lib)
-	if err := os.WriteFile(filepath.Join(home, "f"), nil, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	dirs := []string{retry, lib, "/opt/RTAP", x}
-	tests := []struct {
-		q    string
-		want []string
-	}{
-		{"", dirs},
-		{"rtap", []string{retry, "/opt/RTAP"}},
-		{"RtaP", []string{retry, "/opt/RTAP"}},
-		{"~/s", []string{lib}},
-		{"~/src", []string{src, lib}},
-		{"~", []string{home, retry, lib, x}},
-		{"pat", nil},
-		{"~/x", []string{x}},
-		{"~/x/", []string{x}},
-		{home, []string{home}},
-		{lib, []string{lib}},
-		{"~/missing", nil},
-		{"/", []string{"/", retry, lib, "/opt/RTAP", x}},
-		{"~/f", nil},
-		{"~src", []string{lib}},
-	}
-	for _, tt := range tests {
-		if got := filter(dirs, tt.q, home); !slices.Equal(got, tt.want) {
-			t.Errorf("filter(%q) = %q; want %q", tt.q, got, tt.want)
-		}
-	}
-}
-
-func TestFilterRelative(t *testing.T) {
-	cwd := t.TempDir()
-	t.Chdir(cwd)
-	app := mkdirs(t, cwd, "app")[0]
-	other := "/opt/app"
-	for _, tt := range []struct {
-		q    string
-		want []string
-	}{
-		{"app", []string{other, app}},
-		{"./app", []string{app}},
-		{"./app/", []string{app}},
-		{"../" + filepath.Base(cwd) + "/app", []string{app}},
-		{".", []string{cwd}},
-		{"..", []string{filepath.Dir(cwd)}},
-		{"~", nil},
-		{"~" + cwd, nil},
-	} {
-		if got := filter([]string{other, app}, tt.q, ""); !slices.Equal(got, tt.want) {
-			t.Errorf("filter(%q) = %q; want %q", tt.q, got, tt.want)
-		}
-	}
-}
 
 func mkdirs(t *testing.T, root string, rel ...string) []string {
 	t.Helper()
@@ -88,248 +23,284 @@ func mkdirs(t *testing.T, root string, rel ...string) []string {
 	return dirs
 }
 
-func typeText(m tea.Model, s string) {
-	for _, r := range s {
-		press(m, string(r))
-	}
+// fzfCall is one fzf run that the fake saw.
+type fzfCall struct {
+	args, in []string
 }
 
-func newPicker(t *testing.T, in PickerInput) (*picker, []string) {
+// fakeFzf returns each output in turn, and records the calls.
+type fakeFzf struct {
+	outs  [][]string
+	codes []int
+	calls []fzfCall
+}
+
+func (f *fakeFzf) run(args []string, in iter.Seq[string]) ([]string, int, error) {
+	i := len(f.calls)
+	f.calls = append(f.calls, fzfCall{args, slices.Collect(in)})
+	return f.outs[i], f.codes[i], nil
+}
+
+func (f *fakeFzf) arg(call int, prefix string) string {
+	for _, a := range f.calls[call].args {
+		if strings.HasPrefix(a, prefix) {
+			return a
+		}
+	}
+	return ""
+}
+
+// home sets HOME to a temp dir with these dirs: wt/retry/app, src/app (a
+// repo), src/lib.
+func home(t *testing.T) (string, []string) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	dirs := mkdirs(t, home, "wt/retry/app", "src/app", "src/lib")
-	if in.Recent == nil {
-		in.Recent = dirs
-	}
-	return newPickerModel(in), dirs
+	h := t.TempDir()
+	t.Setenv("HOME", h)
+	dirs := mkdirs(t, h, "wt/retry/app", "src/app/.git", "src/lib")
+	dirs[1] = filepath.Dir(dirs[1])
+	return h, dirs
 }
 
-func TestPickerFilterAndMove(t *testing.T) {
-	p, dirs := newPicker(t, PickerInput{Harness: "claude"})
-	typeText(p, "src")
-	if got := p.matches(); !slices.Equal(got, dirs[1:]) {
-		t.Fatalf("matches = %q; want %q", got, dirs[1:])
+func TestPickDirLines(t *testing.T) {
+	h, dirs := home(t)
+	f := &fakeFzf{outs: [][]string{{"", "", "~/src/lib"}}, codes: []int{0}}
+	in := PickerInput{Recent: []string{dirs[2], filepath.Join(h, "gone")}, Roots: []string{filepath.Join(h, "src")}, Harness: "claude"}
+	got, ok, err := pickWorkstream(in, f.run)
+	if err != nil || !ok || got != (Picked{Dir: dirs[2], Harness: "claude"}) {
+		t.Fatalf("pick = %+v, %v, %v", got, ok, err)
 	}
-	press(p, "down", "down", "up", "ctrl+n", "ctrl+p", "ctrl+n", "enter")
-	if got, ok := p.result(); !ok || got != (Picked{Dir: dirs[2], Harness: "claude"}) {
-		t.Errorf("result = %+v, %v; want %s", got, ok, dirs[2])
+	want := []string{"~/src/lib", "~/src/app", "~", "~/src", "~/wt", "~/wt/retry", "~/wt/retry/app"}
+	if !slices.Equal(f.calls[0].in, want) {
+		t.Errorf("fzf input = %q; want %q", f.calls[0].in, want)
 	}
-	if !strings.Contains(p.View().Content, "~/src/lib") {
-		t.Errorf("view does not show ~ paths:\n%s", p.View().Content)
-	}
-}
-
-func TestPickerHarness(t *testing.T) {
-	p, dirs := newPicker(t, PickerInput{Harness: "omp", Aliases: []string{"omp-sandbox", "fast"}})
-	press(p, "tab")
-	var got []string
-	for range 6 {
-		press(p, "down")
-		got = append(got, p.harness)
-	}
-	if want := []string{"fast", "omp-sandbox", "claude", "codex", "omp", "fast"}; !slices.Equal(got, want) {
-		t.Errorf("down cycles %q; want %q", got, want)
-	}
-	press(p, "up", "up")
-	if p.harness != "codex" {
-		t.Errorf("up gives %q; want codex", p.harness)
-	}
-	for range len("codex") {
-		press(p, "backspace")
-	}
-	typeText(p, "claude --model opus")
-	press(p, "tab")
-	typeText(p, "lib")
-	press(p, "enter")
-	if got, ok := p.result(); !ok || got != (Picked{Dir: dirs[2], Harness: "claude --model opus"}) {
-		t.Errorf("result = %+v, %v", got, ok)
+	if f.arg(0, "--expect=") != "--expect=alt-enter" || !strings.Contains(f.arg(0, "--header="), "claude") {
+		t.Errorf("fzf args = %q", f.calls[0].args)
 	}
 }
 
-func TestPickerEmptyHarness(t *testing.T) {
-	p, _ := newPicker(t, PickerInput{Harness: "omp"})
-	press(p, "tab", "backspace", "backspace", "backspace", "enter")
-	if _, ok := p.result(); ok {
-		t.Fatal("picked with an empty harness")
-	}
-	if !strings.Contains(p.View().Content, "harness is empty") {
-		t.Errorf("view does not say the harness is empty:\n%s", p.View().Content)
-	}
-}
-
-func TestPickerCancel(t *testing.T) {
-	for _, k := range []string{"esc", "ctrl+c"} {
-		p, _ := newPicker(t, PickerInput{Harness: "claude"})
-		press(p, k)
-		if _, ok := p.result(); ok {
-			t.Errorf("%s: want cancel", k)
-		}
-	}
-}
-
-func TestPickerWalk(t *testing.T) {
-	root := t.TempDir()
-	repo := mkdirs(t, root, "repo/.git")[0]
-	p, dirs := newPicker(t, PickerInput{Harness: "claude", Roots: []string{root, root}})
-	cmd := p.Init()
-	if cmd == nil {
-		t.Fatal("no walk command")
-	}
-	if got := p.matches(); !slices.Equal(got, dirs) {
-		t.Fatalf("before walk: %q", got)
-	}
-	for cmd != nil {
-		_, cmd = p.Update(cmd())
-	}
-	if got, want := p.matches(), append(dirs, filepath.Dir(repo)); !slices.Equal(got, want) || p.walking {
-		t.Errorf("after walk: %q, walking %v; want %q", got, p.walking, want)
-	}
-}
-
-func TestPickerWhileWalking(t *testing.T) {
-	p, dirs := newPicker(t, PickerInput{Harness: "claude", Roots: []string{"unused"}})
-	hits := make(chan string, 2)
-	p.hits = hits
-	hits <- dirs[0]
-	hits <- "/opt/app"
-	_, cmd := p.Update(p.next())
-	if got, want := p.matches(), append(dirs, "/opt/app"); !slices.Equal(got, want) || !p.walking || cmd == nil {
-		t.Fatalf("while walking: %q, walking %v; want %q", got, p.walking, want)
-	}
-	if !strings.Contains(p.View().Content, "searching roots") {
-		t.Errorf("no walking indicator:\n%s", p.View().Content)
-	}
-	close(hits)
-	if p.Update(cmd()); p.walking {
-		t.Error("walking after the walk ended")
-	}
-}
-
-func TestPickerStopWalk(t *testing.T) {
-	root := t.TempDir()
-	mkdirs(t, root, "a/.git", "b/.git", "c/.git")
-	var p *picker
-	_, ok, err := pickWorkstream(PickerInput{Harness: "claude", Roots: []string{root}}, func(m tea.Model) error {
-		p = m.(*picker)
-		p.Init()
-		<-p.hits
-		return nil
-	})
-	if ok || err != nil {
-		t.Fatalf("pickWorkstream = %v, %v; want a cancel", ok, err)
-	}
-	select {
-	case <-p.walked:
-	case <-time.After(5 * time.Second):
-		t.Fatal("walk did not stop")
-	}
-}
-
-func TestPickerHint(t *testing.T) {
-	p, _ := newPicker(t, PickerInput{Harness: "claude", Recent: []string{}})
-	if p.Init() != nil {
-		t.Error("walk without roots")
-	}
-	if !strings.Contains(p.View().Content, "Set roots") {
-		t.Errorf("no roots hint:\n%s", p.View().Content)
-	}
-	p, _ = newPicker(t, PickerInput{Harness: "claude", Recent: []string{}, Roots: []string{t.TempDir()}})
-	if strings.Contains(p.View().Content, "Set roots") {
-		t.Errorf("roots hint with roots set:\n%s", p.View().Content)
-	}
-}
-
-func TestPickerOpenTab(t *testing.T) {
+func TestPickTypedPath(t *testing.T) {
+	_, dirs := home(t)
+	other := t.TempDir()
 	for _, tt := range []struct {
-		keys []string
-		want Action
+		query string
+		want  string
 	}{
-		{[]string{"enter"}, Switch},
-		{[]string{"down", "enter"}, Another},
-		{[]string{"down", "down", "enter"}, Switch},
+		{other, other},
+		{"~/src/lib/", dirs[2]},
+		{"nope", ""},
+		{"~/missing", ""},
 	} {
-		var asked string
-		in := PickerInput{Harness: "claude", IsOpen: func(dir string) (string, bool) {
-			asked = dir
-			return "app", strings.HasSuffix(dir, "src/app")
-		}}
-		p, dirs := newPicker(t, in)
-		press(p, "down", "enter")
-		if asked != dirs[1] {
-			t.Fatalf("IsOpen(%q); want %q", asked, dirs[1])
+		f := &fakeFzf{outs: [][]string{{tt.query, ""}}, codes: []int{1}}
+		got, ok, err := pickWorkstream(PickerInput{Harness: "claude"}, f.run)
+		if tt.want == "" {
+			if err == nil || !strings.Contains(err.Error(), tt.query) {
+				t.Errorf("query %q: err = %v; want one that names it", tt.query, err)
+			}
+			continue
 		}
-		if v := p.View().Content; !strings.Contains(v, "switch") || !strings.Contains(v, "open another") {
-			t.Fatalf("no open-tab screen:\n%s", v)
-		}
-		press(p, tt.keys...)
-		if got, ok := p.result(); !ok || got != (Picked{Dir: dirs[1], Harness: "claude", Action: tt.want}) {
-			t.Errorf("%q: result = %+v, %v; want action %v", tt.keys, got, ok, tt.want)
+		if err != nil || !ok || got.Dir != tt.want {
+			t.Errorf("query %q: pick = %+v, %v, %v; want %s", tt.query, got, ok, err, tt.want)
 		}
 	}
 }
 
-func TestPickerOpenTabPaste(t *testing.T) {
-	for _, keys := range [][]string{{"enter"}, {"tab", "enter"}} {
-		p, _ := newPicker(t, PickerInput{Harness: "claude", IsOpen: func(string) (string, bool) { return "app", true }})
-		press(p, keys...)
-		p.Update(tea.PasteMsg{Content: "x"})
-		if p.query != "" || p.harness != "claude" {
-			t.Errorf("%q: query %q, harness %q after paste on the open-tab screen", keys, p.query, p.harness)
+func TestPickTypedPathOverSelection(t *testing.T) {
+	home(t)
+	other := t.TempDir()
+	f := &fakeFzf{outs: [][]string{{other, "", "~/src/lib"}}, codes: []int{0}}
+	got, ok, err := pickWorkstream(PickerInput{Harness: "claude"}, f.run)
+	if err != nil || !ok || got.Dir != other {
+		t.Errorf("pick = %+v, %v, %v; want %s", got, ok, err, other)
+	}
+}
+
+func TestPickCancel(t *testing.T) {
+	home(t)
+	for _, outs := range [][][]string{
+		{{""}},
+		{{"", "alt-enter", "~"}, {""}},
+	} {
+		codes := make([]int, len(outs))
+		codes[len(codes)-1] = 130
+		f := &fakeFzf{outs: outs, codes: codes}
+		if _, ok, err := pickWorkstream(PickerInput{Harness: "claude"}, f.run); ok || err != nil {
+			t.Errorf("after %d fzf runs: ok %v, err %v; want a cancel", len(outs), ok, err)
 		}
 	}
 }
 
-func TestPickerOpenTabBack(t *testing.T) {
-	p, dirs := newPicker(t, PickerInput{Harness: "claude", IsOpen: func(string) (string, bool) { return "app", true }})
-	press(p, "enter", "esc")
-	if _, ok := p.result(); ok {
-		t.Fatal("esc on the open-tab screen picked")
-	}
-	press(p, "down")
-	if got := p.matches()[p.cur]; got != dirs[1] {
-		t.Errorf("after esc, selection = %q; want the list back", got)
+func TestPickEmptyDirList(t *testing.T) {
+	home(t)
+	f := &fakeFzf{outs: [][]string{{"", ""}}, codes: []int{1}}
+	if _, ok, err := pickWorkstream(PickerInput{Harness: "claude"}, f.run); ok || err != nil {
+		t.Errorf("ok %v, err %v; want a cancel", ok, err)
 	}
 }
 
-func TestPickerScroll(t *testing.T) {
-	p, dirs := newPicker(t, PickerInput{Harness: "claude"})
-	p.Update(tea.WindowSizeMsg{Height: 6})
-	press(p, "down", "down")
-	v := p.View().Content
-	if strings.Contains(v, "retry") || !strings.Contains(v, "~/src/lib") {
-		t.Errorf("selection %s not in view:\n%s", dirs[2], v)
+func TestPickFzfError(t *testing.T) {
+	home(t)
+	f := &fakeFzf{outs: [][]string{{""}}, codes: []int{2}}
+	if _, _, err := pickWorkstream(PickerInput{Harness: "claude"}, f.run); err == nil {
+		t.Error("fzf exit 2 gives no error")
 	}
 }
 
-func TestPickerHarnessKeepsSelection(t *testing.T) {
-	p, dirs := newPicker(t, PickerInput{Harness: "claude"})
-	press(p, "down", "down", "tab")
-	typeText(p, " --xy")
-	press(p, "backspace", "enter")
-	if got, ok := p.result(); !ok || got != (Picked{Dir: dirs[2], Harness: "claude --x"}) {
-		t.Errorf("result = %+v, %v; want %s", got, ok, dirs[2])
+func TestPickHarness(t *testing.T) {
+	h, _ := home(t)
+	for _, tt := range []struct {
+		out  []string
+		code int
+		want string
+	}{
+		{[]string{"sand", "omp-sandbox"}, 0, "omp-sandbox"},
+		{[]string{" claude --model opus ", ""}, 1, "claude --model opus"},
+		{[]string{"omp -s", "omp-sandbox"}, 0, "omp -s"},
+	} {
+		f := &fakeFzf{outs: [][]string{{"", "alt-enter", "~"}, tt.out}, codes: []int{0, tt.code}}
+		in := PickerInput{Harness: "omp", Aliases: []string{"omp-sandbox", "claude", "box"}}
+		got, ok, err := pickWorkstream(in, f.run)
+		if err != nil || !ok || got != (Picked{Dir: h, Harness: tt.want}) {
+			t.Errorf("pick = %+v, %v, %v; want harness %q", got, ok, err, tt.want)
+		}
+		if want := []string{"omp", "box", "claude", "omp-sandbox", "codex"}; !slices.Equal(f.calls[1].in, want) {
+			t.Errorf("harness candidates = %q; want %q", f.calls[1].in, want)
+		}
 	}
 }
 
-func TestPickerPaste(t *testing.T) {
-	p, dirs := newPicker(t, PickerInput{Harness: "claude"})
-	press(p, "down")
-	p.Update(tea.PasteMsg{Content: "li\r\nb"})
-	if got := p.matches(); p.query != "lib" || p.cur != 0 || !slices.Equal(got, dirs[2:]) {
-		t.Fatalf("query %q, cur %d, matches %q", p.query, p.cur, got)
-	}
-	press(p, "backspace", "backspace", "backspace", "down", "tab")
-	p.Update(tea.PasteMsg{Content: " --x\n"})
-	press(p, "enter")
-	if got, ok := p.result(); !ok || got != (Picked{Dir: dirs[1], Harness: "claude --x"}) {
-		t.Errorf("result = %+v, %v; want %s", got, ok, dirs[1])
+func TestPickEmptyHarness(t *testing.T) {
+	home(t)
+	f := &fakeFzf{outs: [][]string{{"", "alt-enter", "~"}, {"  ", ""}}, codes: []int{0, 1}}
+	if _, _, err := pickWorkstream(PickerInput{Harness: "claude"}, f.run); err == nil || !strings.Contains(err.Error(), "harness is empty") {
+		t.Errorf("err = %v; want harness is empty", err)
 	}
 }
 
-func TestPickerWarning(t *testing.T) {
-	p, _ := newPicker(t, PickerInput{Harness: "claude", Warning: "bad recent.toml"})
-	if v := p.View().Content; !strings.Contains(v, "warning: bad recent.toml") {
-		t.Errorf("no warning:\n%s", v)
+func TestTypedDir(t *testing.T) {
+	h, dirs := home(t)
+	if err := os.WriteFile(filepath.Join(h, "f"), nil, 0o644); err != nil {
+		t.Fatal(err)
 	}
+	t.Chdir(filepath.Join(h, "src"))
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct {
+		q, home, want string
+	}{
+		{".", h, wd},
+		{"..", h, filepath.Dir(wd)},
+		{"./app", h, filepath.Join(wd, "app")},
+		{"../src/app", h, filepath.Join(wd, "app")},
+		{"~", h, h},
+		{"~/src/lib/", h, dirs[2]},
+		{"~", "", ""},
+		{"~/x", "", ""},
+		{"~/f", h, ""},
+		{"~src", h, ""},
+		{"app", h, ""},
+	} {
+		got, ok := typedDir(tt.q, tt.home)
+		if ok != (tt.want != "") || ok && got != tt.want {
+			t.Errorf("typedDir(%q, %q) = %q, %v; want %q", tt.q, tt.home, got, ok, tt.want)
+		}
+	}
+}
+
+func TestDirLinesDropsTabAndNewline(t *testing.T) {
+	h, _ := home(t)
+	mkdirs(t, h, "a\tb", "c\nd")
+	got := slices.Collect(dirLines(t.Context(), PickerInput{}, h))
+	if want := []string{"~", "~/src", "~/src/app", "~/src/lib", "~/wt", "~/wt/retry", "~/wt/retry/app"}; !slices.Equal(got, want) {
+		t.Errorf("lines = %q; want %q", got, want)
+	}
+}
+
+func TestDirLinesRelativeRoot(t *testing.T) {
+	t.Chdir(t.TempDir())
+	mkdirs(t, ".", "src/app/.git")
+	got := slices.Collect(dirLines(t.Context(), PickerInput{Roots: []string{"src"}}, ""))
+	want, _ := filepath.Abs("src/app")
+	if !slices.Equal(got, []string{want}) {
+		t.Fatalf("lines = %q; want %q", got, want)
+	}
+	if d, ok := typedDir(got[0], ""); !ok || d != want {
+		t.Errorf("typedDir(%q) = %q, %v", got[0], d, ok)
+	}
+}
+
+func TestDirLinesHomeTrailingSlash(t *testing.T) {
+	h, _ := home(t)
+	t.Setenv("HOME", h+"/")
+	f := &fakeFzf{outs: [][]string{{""}}, codes: []int{130}}
+	_, _, _ = pickWorkstream(PickerInput{}, f.run)
+	if !slices.Contains(f.calls[0].in, "~/src") {
+		t.Errorf("fzf input = %q; want ~/src", f.calls[0].in)
+	}
+}
+
+func TestPickOpenTab(t *testing.T) {
+	h, _ := home(t)
+	isOpen := func(dir string) (string, bool) { return "app", dir == h }
+	for _, tt := range []struct {
+		choice string
+		want   Action
+	}{
+		{"switch to tab app", Switch},
+		{"open another tab", Another},
+	} {
+		f := &fakeFzf{outs: [][]string{{"", "", "~"}, {tt.choice}}, codes: []int{0, 0}}
+		got, ok, err := pickWorkstream(PickerInput{Harness: "claude", IsOpen: isOpen}, f.run)
+		if err != nil || !ok || got != (Picked{Dir: h, Harness: "claude", Action: tt.want}) {
+			t.Errorf("choice %q: pick = %+v, %v, %v", tt.choice, got, ok, err)
+		}
+		if want := []string{"switch to tab app", "open another tab"}; !slices.Equal(f.calls[1].in, want) {
+			t.Errorf("open-tab lines = %q; want %q", f.calls[1].in, want)
+		}
+	}
+}
+
+func TestPickWarning(t *testing.T) {
+	home(t)
+	f := &fakeFzf{outs: [][]string{{""}}, codes: []int{130}}
+	_, _, _ = pickWorkstream(PickerInput{Harness: "claude", Warning: "bad recent.toml"}, f.run)
+	if !strings.Contains(f.arg(0, "--header="), "warning: bad recent.toml") {
+		t.Errorf("no warning in fzf args %q", f.calls[0].args)
+	}
+}
+
+func TestRunFzf(t *testing.T) {
+	if _, err := exec.LookPath("fzf"); err != nil {
+		t.Skip("fzf not on PATH")
+	}
+	for _, tt := range []struct {
+		query string
+		want  []string
+		code  int
+	}{
+		{"b", []string{"b", "bb"}, 0},
+		{"z", []string{""}, 1},
+	} {
+		out, code, err := runFzf([]string{"--filter=" + tt.query}, slices.Values([]string{"a", "b", "bb"}))
+		if err != nil || code != tt.code || !slices.Equal(out, tt.want) {
+			t.Errorf("filter %q: %q, %d, %v; want %q, %d", tt.query, out, code, err, tt.want, tt.code)
+		}
+	}
+}
+
+func TestRunFzfStopsInput(t *testing.T) {
+	if _, err := exec.LookPath("fzf"); err != nil {
+		t.Skip("fzf not on PATH")
+	}
+	stopped := make(chan struct{})
+	endless := func(yield func(string) bool) {
+		defer close(stopped)
+		for yield("a") {
+		}
+	}
+	if _, code, _ := runFzf([]string{"--no-such-flag"}, endless); code != 2 {
+		t.Errorf("code = %d; want 2", code)
+	}
+	<-stopped
 }
