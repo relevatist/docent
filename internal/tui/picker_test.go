@@ -193,6 +193,17 @@ func TestPickerOpenTab(t *testing.T) {
 	}
 }
 
+func TestPickerOpenTabPaste(t *testing.T) {
+	for _, keys := range [][]string{{"enter"}, {"tab", "enter"}} {
+		p, _ := newPicker(t, PickerInput{Harness: "claude", IsOpen: func(string) (string, bool) { return "app", true }})
+		press(p, keys...)
+		p.Update(tea.PasteMsg{Content: "x"})
+		if p.query != "" || p.harness != "claude" {
+			t.Errorf("%q: query %q, harness %q after paste on the open-tab screen", keys, p.query, p.harness)
+		}
+	}
+}
+
 func TestPickerOpenTabBack(t *testing.T) {
 	p, dirs := newPicker(t, PickerInput{Harness: "claude", IsOpen: func(string) (string, bool) { return "app", true }})
 	press(p, "enter", "esc")
