@@ -24,7 +24,7 @@ const layout = `layout {
             plugin location="zellij:status-bar"
         }
     }
-    tab {
+    tab name=%s {
         pane split_direction="vertical" {
             pane name="editor" command="hx" size="60%%" focus=true
             pane split_direction="horizontal" {
@@ -36,9 +36,9 @@ const layout = `layout {
 }
 `
 
-// Layout returns the workstream KDL layout. harness is split on spaces into
-// a command and its args; shell quoting is not supported.
-func Layout(harness string) (string, error) {
+// Layout returns the workstream KDL layout for a tab called name. harness is
+// split on spaces into a command and its args; shell quoting is not supported.
+func Layout(harness, name string) (string, error) {
 	f := strings.Fields(harness)
 	if len(f) == 0 {
 		return "", errors.New("harness command is empty")
@@ -51,7 +51,7 @@ func Layout(harness string) (string, error) {
 		}
 		args = " {\n                    args " + strings.Join(q, " ") + "\n                }"
 	}
-	return fmt.Sprintf(layout, quote(f[0]), args), nil
+	return fmt.Sprintf(layout, quote(name), quote(f[0]), args), nil
 }
 
 func quote(s string) string {
@@ -68,7 +68,8 @@ func Run(r zellij.Runner, attach Attach, w io.Writer, dir, name, harness string,
 	if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
 		return fmt.Errorf("%s: not a directory", dir)
 	}
-	kdl, err := Layout(harness)
+	name = cmp.Or(name, filepath.Base(dir))
+	kdl, err := Layout(harness, name)
 	if err != nil {
 		return err
 	}
@@ -77,7 +78,6 @@ func Run(r zellij.Runner, attach Attach, w io.Writer, dir, name, harness string,
 			return err
 		}
 	}
-	name = cmp.Or(name, filepath.Base(dir))
 	tab := []string{"action", "new-tab", "--layout-string", kdl, "--name", name, "--cwd", dir}
 	if inZellij {
 		_, err := r.Run(tab...)

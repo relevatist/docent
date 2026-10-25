@@ -14,11 +14,12 @@ import (
 )
 
 func TestLayout(t *testing.T) {
-	kdl, err := Layout(`omp --model "x"`)
+	kdl, err := Layout(`omp --model "x"`, `my "app"`)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
+		`tab name="my \"app\"" {`,
 		`pane name="editor" command="hx" size="60%" focus=true`,
 		`pane name="harness" command="omp"`,
 		`args "--model" "\"x\""`,
@@ -35,7 +36,7 @@ func TestLayout(t *testing.T) {
 }
 
 func TestLayoutNoArgs(t *testing.T) {
-	kdl, err := Layout("claude")
+	kdl, err := Layout("claude", "app")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,7 +46,7 @@ func TestLayoutNoArgs(t *testing.T) {
 }
 
 func TestLayoutEmptyHarness(t *testing.T) {
-	if _, err := Layout("  "); err == nil {
+	if _, err := Layout("  ", "app"); err == nil {
 		t.Error("want error for empty harness")
 	}
 }
@@ -98,8 +99,8 @@ func TestRunInsideZellij(t *testing.T) {
 		t.Errorf("want version warning, got %q", warn)
 	}
 	last := f.Calls[len(f.Calls)-1]
-	kdl, _ := Layout("cat")
 	dir := last[len(last)-1]
+	kdl, _ := Layout("cat", filepath.Base(dir))
 	want := []string{"action", "new-tab", "--layout-string", kdl, "--name", filepath.Base(dir), "--cwd", dir}
 	if !slices.Equal(last, want) {
 		t.Errorf("got %q, want %q", last, want)
@@ -114,13 +115,17 @@ func TestRunOutsideZellij(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	kdl, _ := Layout("cat")
 	if len(calls) != 1 {
 		t.Fatalf("want one attach, got %v", calls)
 	}
-	want := []string{"--session", filepath.Base(calls[0].dir), "--new-session-with-layout", kdl}
+	session := filepath.Base(calls[0].dir)
+	kdl, _ := Layout("cat", session)
+	want := []string{"--session", session, "--new-session-with-layout", kdl}
 	if !slices.Equal(calls[0].args, want) {
 		t.Errorf("got %q, want %q", calls[0].args, want)
+	}
+	if !strings.Contains(calls[0].args[3], `tab name="`+session+`" {`) {
+		t.Errorf("layout tab not named %q:\n%s", session, calls[0].args[3])
 	}
 }
 
@@ -144,7 +149,7 @@ func TestRunOutsideZellijSessionExists(t *testing.T) {
 		t.Errorf("unexpected warning %q", warn.String())
 	}
 	last := f.Calls[len(f.Calls)-1]
-	kdl, _ := Layout("cat")
+	kdl, _ := Layout("cat", "app")
 	want := []string{"--session", "app", "action", "new-tab", "--layout-string", kdl, "--name", "app", "--cwd", dir}
 	if !slices.Equal(last, want) {
 		t.Errorf("got %q, want %q", last, want)
@@ -200,7 +205,7 @@ func TestSessionState(t *testing.T) {
 }
 
 func TestRunOutsideZellijSessions(t *testing.T) {
-	kdl, _ := Layout("cat")
+	kdl, _ := Layout("cat", "app")
 	for _, tc := range []struct {
 		sessions string
 		calls    [][]string
