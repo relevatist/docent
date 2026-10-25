@@ -75,7 +75,7 @@ from a checklist.
   claude  Claude Code plugin (skill + reload hook), through the claude CLI
   codex   ~/.agents/skills/zide/SKILL.md
   omp     ~/.agents/skills/zide/SKILL.md, ~/.omp/agent/extensions/zide-reload.ts
-  zellij  Alt w key for zide new, in the Zellij config.kdl (old file kept as config.kdl.zide.bak)`)
+  zellij  Alt w key for zide new, in the Zellij config.kdl (the first old file kept as config.kdl.zide.bak)`)
 		fs.PrintDefaults()
 	}
 	var names []string

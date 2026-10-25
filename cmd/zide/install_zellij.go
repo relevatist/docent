@@ -285,6 +285,9 @@ func (z *zellijTarget) check(force bool) string {
 	if z.exists && z.data == z.old {
 		return ""
 	}
+	if err := checkWritable(filepath.Dir(path)); err != nil {
+		return path + ": " + err.Error()
+	}
 	if _, err := exec.LookPath("zellij"); err != nil {
 		return "" // check names the missing command
 	}
@@ -292,6 +295,22 @@ func (z *zellijTarget) check(force bool) string {
 		return path + ": " + err.Error()
 	}
 	return ""
+}
+
+// checkWritable makes and removes a temp file in dir, or in its nearest
+// parent that exists.
+func checkWritable(dir string) error {
+	for {
+		if _, err := os.Stat(dir); err == nil || filepath.Dir(dir) == dir {
+			break
+		}
+		dir = filepath.Dir(dir)
+	}
+	f, err := os.CreateTemp(dir, ".zide-check-*")
+	if err != nil {
+		return err
+	}
+	return errors.Join(f.Close(), os.Remove(f.Name()))
 }
 
 func (z *zellijTarget) apply(out io.Writer) error {
@@ -307,10 +326,19 @@ func (z *zellijTarget) apply(out io.Writer) error {
 			return err
 		}
 		mode = fi.Mode().Perm()
-		if err := os.WriteFile(z.path+".zide.bak", []byte(z.old), mode); err != nil {
+		bak := z.path + ".zide.bak"
+		msg := bak
+		b, err := os.OpenFile(bak, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
+		if err == nil {
+			_, err = b.WriteString(z.old)
+			err = errors.Join(err, b.Close())
+		} else if errors.Is(err, fs.ErrExist) {
+			msg, err = bak+" kept (it holds the config from before zide)", nil
+		}
+		if err != nil {
 			return err
 		}
-		if _, err := fmt.Fprintln(out, z.path+".zide.bak"); err != nil {
+		if _, err := fmt.Fprintln(out, msg); err != nil {
 			return err
 		}
 	} else if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -324,6 +352,9 @@ func (z *zellijTarget) apply(out io.Writer) error {
 	_, err = f.WriteString(z.data)
 	if err == nil {
 		err = f.Chmod(mode)
+	}
+	if err == nil {
+		err = f.Sync()
 	}
 	if err := errors.Join(err, f.Close()); err != nil {
 		return err

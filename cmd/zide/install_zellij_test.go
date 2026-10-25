@@ -176,7 +176,7 @@ func TestInstallZellij(t *testing.T) {
 	log := fakeZellij(t, "0")
 	dotfile := filepath.Join(home, "dotfiles/config.kdl")
 	writeTestFile(t, dotfile, userConfig)
-	if err := os.Chmod(dotfile, 0o600); err != nil {
+	if err := os.Chmod(dotfile, 0o640); err != nil {
 		t.Fatal(err)
 	}
 	cfg := filepath.Join(home, ".config/zellij/config.kdl")
@@ -197,7 +197,7 @@ func TestInstallZellij(t *testing.T) {
 	if fi, err := os.Lstat(cfg); err != nil || fi.Mode()&os.ModeSymlink == 0 {
 		t.Error("symlink replaced")
 	}
-	if fi, err := os.Stat(dotfile); err != nil || fi.Mode().Perm() != 0o600 {
+	if fi, err := os.Stat(dotfile); err != nil || fi.Mode().Perm() != 0o640 {
 		t.Errorf("mode not kept: %v", fi.Mode())
 	}
 	if readFile(t, dotfile+".zide.bak") != userConfig {
@@ -217,6 +217,47 @@ func TestInstallZellij(t *testing.T) {
 	if readFile(t, dotfile) != want || !strings.Contains(out.String(), "unchanged") {
 		t.Errorf("rerun changed the config or did not say so:\n%s", out.String())
 	}
+
+	out.Reset()
+	writeTestFile(t, dotfile, strings.Replace(want, "floating true", "floating false", 1))
+	if code := installCmd([]string{"zellij", "--force"}, &out, &errw, false, nil); code != 0 {
+		t.Fatalf("force: exit %d: %s", code, errw.String())
+	}
+	if readFile(t, dotfile) != want || readFile(t, dotfile+".zide.bak") != userConfig {
+		t.Error("force rerun did not keep the first backup")
+	}
+	if !strings.Contains(out.String(), ".zide.bak kept") {
+		t.Errorf("output does not say that the backup was kept:\n%s", out.String())
+	}
+}
+
+func TestInstallZellijReadOnlyDir(t *testing.T) {
+	home := tempHome(t)
+	fakeHarnesses(t, "codex", "zellij")
+	fakeZellij(t, "0")
+	ro := filepath.Join(home, "ro")
+	writeTestFile(t, filepath.Join(ro, "config.kdl"), userConfig)
+	cfg := filepath.Join(home, ".config/zellij/config.kdl")
+	if err := os.MkdirAll(filepath.Dir(cfg), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(ro, "config.kdl"), cfg); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(ro, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(ro, 0o755) })
+	var out, errw bytes.Buffer
+	if code := installCmd([]string{"codex", "zellij"}, &out, &errw, false, nil); code == 0 {
+		t.Fatal("want non-zero exit")
+	}
+	if !strings.Contains(errw.String(), "permission denied") {
+		t.Errorf("error: %s", errw.String())
+	}
+	if _, err := os.Stat(filepath.Join(home, ".agents")); !os.IsNotExist(err) {
+		t.Error("wrote the codex skill although the Zellij dir is read-only")
+	}
 }
 
 func TestInstallZellijNewFile(t *testing.T) {
@@ -235,6 +276,9 @@ func TestInstallZellijNewFile(t *testing.T) {
 	}
 	if _, err := os.Stat(cfg + ".zide.bak"); !os.IsNotExist(err) {
 		t.Error("backup written for a new file")
+	}
+	if fi, err := os.Stat(cfg); err != nil || fi.Mode().Perm() != 0o644 {
+		t.Errorf("mode: %v", fi.Mode())
 	}
 }
 
