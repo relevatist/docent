@@ -9,6 +9,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/relevatist/zide/internal/tour"
 )
 
 func TestSkillFrontmatter(t *testing.T) {
@@ -22,14 +24,20 @@ func TestSkillFrontmatter(t *testing.T) {
 	if !regexp.MustCompile(`(?m)^description: \S.*$`).MatchString(front) {
 		t.Errorf("frontmatter has no description:\n%s", front)
 	}
-	for _, s := range []string{"$ZELLIJ", "zide open", "zide reload", "zide tour", "zide diff", "unsaved"} {
+	for _, s := range []string{"$ZELLIJ", "zide open", "zide reload", "zide tour", "unsaved", "pseudocode", "call tree", "component tree", "file tree", "```diff", "```mermaid", "sequenceDiagram", "erDiagram"} {
 		if !strings.Contains(body, s) {
 			t.Errorf("SKILL.md body does not mention %q", s)
 		}
 	}
 	for _, h := range []string{"claude", "codex", "omp", "oh-my-pi", "PostToolUse"} {
-		if strings.Contains(strings.ToLower(body), strings.ToLower(h)) {
+		if regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(h) + `\b`).MatchString(body) {
 			t.Errorf("SKILL.md body mentions harness-specific %q", h)
+		}
+	}
+	// The tour pane cannot show HTML, and zide diff is gone.
+	for _, s := range []string{"html", "browser", "zide diff"} {
+		if strings.Contains(strings.ToLower(body), s) {
+			t.Errorf("SKILL.md body mentions %q", s)
 		}
 	}
 }
@@ -39,18 +47,9 @@ func TestSkillTourExampleIsValidJSON(t *testing.T) {
 	if !ok {
 		t.Fatal("SKILL.md has no json example")
 	}
-	example, _, _ := strings.Cut(rest, "```")
-	var tour struct {
-		Steps []struct {
-			File  string `json:"file"`
-			Lines []int  `json:"lines"`
-		} `json:"steps"`
-	}
-	if err := json.Unmarshal([]byte(example), &tour); err != nil {
+	example, _, _ := strings.Cut(rest, "\n```\n")
+	if _, err := tour.Parse([]byte(example)); err != nil {
 		t.Fatal(err)
-	}
-	if len(tour.Steps) == 0 || tour.Steps[0].File == "" {
-		t.Errorf("example has no steps: %+v", tour)
 	}
 }
 

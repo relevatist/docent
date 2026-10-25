@@ -2,16 +2,32 @@
 
 ## Purpose
 
-Walks the user through a code change one step at a time, in an order that helps understanding, with the editor following each step and no change left out.
+Walks the user through a code change one step at a time, in an order that helps understanding, with a Markdown note for each step and the editor following each step.
 
 ## Requirements
 
 ### Requirement: Tour file format
-A tour SHALL be a JSON object with optional `title`, optional `base` (a git revision), and a non-empty `steps` array. Each step SHALL have a `file`, optional `lines` as `[start, end]`, and optional `note`. A step without `lines` SHALL cover the whole file.
+A tour SHALL be a JSON object with optional `title` and a non-empty `steps` array. Each step SHALL have an optional `file`, optional `lines` as `[start, end]`, and optional `note` in Markdown. A step SHALL have a `file`, a `note`, or both. `lines` SHALL require `file`. A step with a `file` and without `lines` SHALL cover the whole file. zide SHALL ignore unknown fields.
 
 #### Scenario: Valid tour
-- **WHEN** zide reads `{"title":"Retry","base":"main","steps":[{"file":"a.go","lines":[1,40],"note":"New type"}]}`
-- **THEN** the tour has one step for `a.go` lines 1 to 40 with note `New type`, compared against `main`
+- **WHEN** zide reads `{"title":"Retry","steps":[{"file":"a.go","lines":[1,40],"note":"New type"}]}`
+- **THEN** the tour has one step for `a.go` lines 1 to 40 with note `New type`
+
+#### Scenario: Note-only step
+- **WHEN** zide reads `{"steps":[{"note":"## Overview"}]}`
+- **THEN** the tour has one step with no file and note `## Overview`
+
+#### Scenario: Empty step
+- **WHEN** a step has neither `file` nor `note`
+- **THEN** zide prints an error that names the step and exits non-zero without opening a pane
+
+#### Scenario: Lines without file
+- **WHEN** a step has `lines` and no `file`
+- **THEN** zide prints an error that names the step and exits non-zero without opening a pane
+
+#### Scenario: Old tour with base
+- **WHEN** zide reads a tour that has a `base` field
+- **THEN** zide ignores `base` and runs the tour
 
 #### Scenario: Invalid JSON
 - **WHEN** the tour file is not valid JSON or has no steps
@@ -28,33 +44,19 @@ A tour SHALL be a JSON object with optional `title`, optional `base` (a git revi
 - **WHEN** the harness pipes a tour to `zide tour -`
 - **THEN** the tour pane opens with that tour
 
-### Requirement: Diff against base
-zide SHALL compare the working tree against the tour's `base`, or `HEAD` when `base` is absent. Staged and unstaged changes SHALL both count.
-
-#### Scenario: No base
-- **WHEN** a tour has no `base` and the working tree has unstaged edits
-- **THEN** the tour shows those edits as changes
-
-### Requirement: Step view
-Each step SHALL show its position (for example `2/5`), file, line range, and note. Changed lines in the step's range SHALL show as a diff. Unchanged lines in the range SHALL show as plain context.
-
-#### Scenario: Step on changed code
-- **WHEN** a step's range contains a hunk
-- **THEN** the step view shows added and removed lines for that hunk
-
-#### Scenario: Step on unchanged code
-- **WHEN** a step points at a caller that the change did not touch
-- **THEN** the step view shows those lines as plain context
-
 ### Requirement: Editor follows the tour
-On entering a step, zide SHALL open the step's file in the editor at the step's first line, without moving focus away from the tour pane.
+On entering a step that has a file, zide SHALL open the step's file in the editor at the step's first line, without moving focus away from the tour pane. On entering a step without a file, the editor SHALL stay where it is.
 
 #### Scenario: Next step
 - **WHEN** the user moves to a step for `b.go` lines 88 to 102
 - **THEN** the editor shows `b.go` at line 88 and focus stays on the tour pane
 
+#### Scenario: Step without a file
+- **WHEN** the user moves to a step with no file
+- **THEN** the editor stays where it is
+
 ### Requirement: User controls navigation
-The tour SHALL move only on user input. Keys: `n` next step, `p` previous step, `o` open the step in the editor again, `s` send the step as a reference to the harness, `q` close the tour pane. At the first or last step, `p` or `n` SHALL do nothing.
+The tour SHALL move only on user input. Keys: `n` next step, `p` previous step, `o` open the step in the editor again, `s` send the step as a reference to the harness, `q` close the tour pane. At the first or last step, `p` or `n` SHALL do nothing. On a step without a file or with an invalid file, `o` and `s` SHALL do nothing.
 
 #### Scenario: Last step
 - **WHEN** the user is on the last step and presses `n`
@@ -64,20 +66,13 @@ The tour SHALL move only on user input. Keys: `n` next step, `p` previous step, 
 - **WHEN** the user presses `s` on a step for `a.go` lines 1 to 40
 - **THEN** the harness input receives the reference for `a.go:1-40` and nothing is submitted
 
+#### Scenario: Send on a note-only step
+- **WHEN** the user presses `s` on a step with no file
+- **THEN** nothing is sent to the harness
+
 #### Scenario: Close
 - **WHEN** the user presses `q`
 - **THEN** the tour pane closes and the shell pane takes its place
-
-### Requirement: Show uncovered hunks
-zide SHALL add a final step titled `Not covered by this tour` that lists every hunk no step covers. A hunk SHALL count as covered when a step for the same file overlaps it, or a step names the file without `lines`. When all hunks are covered, zide SHALL NOT add this step.
-
-#### Scenario: Skipped hunk
-- **WHEN** the change has hunks in `a.go` and `c.go` and the tour only has steps for `a.go`
-- **THEN** the last step lists the `c.go` hunks
-
-#### Scenario: Full coverage
-- **WHEN** every hunk overlaps a step
-- **THEN** the tour has no `Not covered by this tour` step
 
 ### Requirement: Invalid steps
 A step whose file does not exist, or whose range is outside the file, SHALL show as invalid with the reason. The tour SHALL still run and the editor SHALL NOT move for that step.
@@ -86,13 +81,51 @@ A step whose file does not exist, or whose range is outside the file, SHALL show
 - **WHEN** a step names `gone.go`, which does not exist
 - **THEN** the step shows `invalid: gone.go not found` and the editor stays where it is
 
-### Requirement: Plain diff walk-through
-`zide diff [git diff args]` SHALL open a tour with one step per hunk of `git diff [args]`, in git's order, with no notes.
+### Requirement: Markdown step view
+Each step SHALL show its position (for example `2/5`), its heading, and its note rendered as Markdown and wrapped to the pane width. The heading SHALL be the file and line range, or the tour title when the step has no file. The step view SHALL NOT show the file content or a diff of it.
 
-#### Scenario: Shell starts a diff
-- **WHEN** the user runs `zide diff` in the shell pane with three changed hunks
-- **THEN** a tour pane opens with three steps, one per hunk
+#### Scenario: Step with a file
+- **WHEN** the user is on step 2 of 5 for `a.go` lines 1 to 40
+- **THEN** the pane shows `2/5  a.go:1-40` and the rendered note, and no lines of `a.go`
 
-#### Scenario: No changes
-- **WHEN** the user runs `zide diff` and there are no changes
-- **THEN** zide prints `no changes` and opens no pane
+#### Scenario: Markdown note
+- **WHEN** a note has a heading, a list, and a fenced `diff` block
+- **THEN** the pane shows them formatted, with added and removed lines in the diff block in different colors
+
+#### Scenario: Note-only step
+- **WHEN** the user is on a step with no file in a tour titled `Retry`
+- **THEN** the pane shows the position, `Retry`, and the rendered note
+
+#### Scenario: Control characters in a note
+- **WHEN** a note contains a terminal escape sequence
+- **THEN** the pane shows a replacement character in its place and the terminal does not act on it
+
+### Requirement: Scroll the step view
+When the step view is taller than the pane, the user SHALL be able to scroll it. Keys: `j` or `down` one line down, `k` or `up` one line up, `pgdown`, `space`, or `ctrl+d` one page down, `pgup`, `b`, or `ctrl+u` one page up, `g` to the top, `G` to the bottom. A page SHALL be the number of visible view lines. The position, heading, and key help SHALL stay visible. Scroll SHALL stop at the top and at the last line. Moving to another step SHALL reset scroll to the top.
+
+#### Scenario: Page down
+- **WHEN** the view shows 20 lines of a 50-line note at the top and the user presses `pgdown`
+- **THEN** the view shows lines 21 to 40
+
+#### Scenario: Bottom
+- **WHEN** the user presses `G`
+- **THEN** the view shows the last line of the note
+
+#### Scenario: Page up at the top
+- **WHEN** the view is at the top and the user presses `pgup`
+- **THEN** the view stays at the top
+
+#### Scenario: New step
+- **WHEN** the user has scrolled down and presses `n`
+- **THEN** the next step shows from its top
+
+### Requirement: Mermaid diagrams in notes
+A fenced `mermaid` block in a note SHALL show as a text diagram. Flowchart, sequence, and ER diagrams SHALL be supported. When zide cannot draw a block, it SHALL show the block's source and the reason.
+
+#### Scenario: Flowchart
+- **WHEN** a note has a `mermaid` block with `graph LR` and `A --> B`
+- **THEN** the pane shows boxes `A` and `B` joined by an arrow
+
+#### Scenario: Unsupported diagram
+- **WHEN** a note has a `mermaid` block that zide cannot draw
+- **THEN** the pane shows the block's source and the reason it was not drawn

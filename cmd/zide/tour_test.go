@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -13,13 +12,10 @@ import (
 	"github.com/relevatist/zide/internal/zellij"
 )
 
-// gitRepo makes a temp repo with one commit of a.go, chdirs into it, and
+// workdir makes a temp dir (not a git repo) with a.go, chdirs into it, and
 // returns its path.
-func gitRepo(t *testing.T) string {
+func workdir(t *testing.T) string {
 	t.Helper()
-	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("no git")
-	}
 	dir, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -27,12 +23,6 @@ func gitRepo(t *testing.T) string {
 	t.Chdir(dir)
 	if err := os.WriteFile("a.go", []byte("1\n2\n3\n"), 0o644); err != nil {
 		t.Fatal(err)
-	}
-	for _, args := range [][]string{{"init", "-q"}, {"add", "."}, {"commit", "-qm", "init"}} {
-		cmd := exec.Command("git", append([]string{"-c", "user.email=a@b", "-c", "user.name=a"}, args...)...)
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %q: %v\n%s", args, err, out)
-		}
 	}
 	return dir
 }
@@ -74,7 +64,7 @@ func paneCmd(t *testing.T, f *paneFake, cwd string) []string {
 }
 
 func TestTourOpensPane(t *testing.T) {
-	dir := gitRepo(t)
+	dir := workdir(t)
 	if err := os.WriteFile("plan.json", []byte(`{"steps":[{"file":"a.go","lines":[1,2]}]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -99,10 +89,10 @@ func TestTourOpensPane(t *testing.T) {
 }
 
 func TestTourStdin(t *testing.T) {
-	dir := gitRepo(t)
+	dir := workdir(t)
 	f := newPaneFake(t)
 	var out bytes.Buffer
-	in := strings.NewReader(`{"steps":[{"file":"a.go"}]}`)
+	in := strings.NewReader(`{"base":"nosuchrev","steps":[{"note":"## Overview"},{"file":"a.go"}]}`)
 	if code := tourCmd(f, []string{"-"}, in, &out); code != 0 {
 		t.Fatalf("exit %d: %s", code, out.String())
 	}
@@ -113,8 +103,8 @@ func TestTourStdin(t *testing.T) {
 }
 
 func TestTourInvalid(t *testing.T) {
-	gitRepo(t)
-	for _, in := range []string{`nope`, `{"steps":[]}`, `{"base":"nosuchrev","steps":[{"file":"a.go"}]}`} {
+	workdir(t)
+	for _, in := range []string{`nope`, `{"steps":[]}`, `{"steps":[{}]}`, `{"steps":[{"lines":[1,2]}]}`} {
 		f := workstream(t)
 		var out bytes.Buffer
 		if code := tourCmd(f, []string{"-"}, strings.NewReader(in), &out); code == 0 {
@@ -129,37 +119,10 @@ func TestTourInvalid(t *testing.T) {
 	}
 }
 
-func TestDiffNoChanges(t *testing.T) {
-	gitRepo(t)
-	f := workstream(t)
-	var out bytes.Buffer
-	if code := diffCmd(f, nil, &out, &out); code != 0 || strings.TrimSpace(out.String()) != "no changes" {
-		t.Fatalf("exit %d: %q", code, out.String())
-	}
-	if len(f.Calls) != 0 {
-		t.Fatalf("zellij called: %q", f.Calls)
-	}
-}
-
-func TestDiffOpensPane(t *testing.T) {
-	dir := gitRepo(t)
-	if err := os.WriteFile("a.go", []byte("1\nTWO\n3\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	f := newPaneFake(t)
-	var out bytes.Buffer
-	if code := diffCmd(f, []string{"--", "a.go"}, &out, &out); code != 0 {
-		t.Fatalf("exit %d: %s", code, out.String())
-	}
-	if cmd := paneCmd(t, f, dir); !slices.Equal(cmd[1:], []string{"tour-view", "--diff", "--", "a.go"}) {
-		t.Fatalf("pane command %q", cmd)
-	}
-}
-
 func TestStepOpensEditorWithoutFocus(t *testing.T) {
-	dir := gitRepo(t)
+	dir := workdir(t)
 	f := workstream(t)
-	items := tour.Build(tour.Tour{Steps: []tour.Step{{File: "a.go", Lines: []int{2, 3}}}}, nil, dir)
+	items := tour.Build(tour.Tour{Steps: []tour.Step{{File: "a.go", Lines: []int{2, 3}}}}, dir)
 	m := newModel(f, items)
 	m.Start()
 	if !hasCall(f, "action", "write-chars", "--pane-id", "terminal_3", "--", ":open '"+filepath.Join(dir, "a.go")+"'") ||
@@ -172,7 +135,7 @@ func TestStepOpensEditorWithoutFocus(t *testing.T) {
 }
 
 func TestTourViewRemovesTempFile(t *testing.T) {
-	gitRepo(t)
+	workdir(t)
 	tmp := filepath.Join(t.TempDir(), "t.json")
 	if err := os.WriteFile(tmp, []byte(`{"steps":[{"file":"a.go"}]}`), 0o644); err != nil {
 		t.Fatal(err)

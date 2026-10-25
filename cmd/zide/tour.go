@@ -19,11 +19,16 @@ const tourUsage = `usage: zide tour <file|->
 Open a tour pane stacked with the shell pane and walk through a change.
 "-" reads the tour from standard input. Tour format:
 
-  {"title": "...", "base": "<git rev, default HEAD>",
-   "steps": [{"file": "a.go", "lines": [1, 40], "note": "..."}]}
+  {"title": "...",
+   "steps": [{"note": "## Overview ..."},
+             {"file": "a.go", "lines": [1, 40], "note": "..."}]}
+
+A step needs a file, a note, or both. "lines" needs a file. The note is
+Markdown; mermaid code blocks show as text diagrams.
 
 Keys in the tour pane: n next, p previous, o open in editor again,
-s send step to harness, q close.`
+s send step to harness, q close, j/k scroll, pgdown/space/ctrl+d and
+pgup/b/ctrl+u page, g/G top/bottom.`
 
 func runTour(args []string) int {
 	return tourCmd(zellij.Exec{}, args, os.Stdin, os.Stderr)
@@ -58,16 +63,11 @@ func startTour(r zellij.Runner, src string, stdin io.Reader) error {
 	if err != nil {
 		return err
 	}
-	t, err := tour.Parse(data)
-	if err != nil {
+	if _, err := tour.Parse(data); err != nil {
 		return err
 	}
 	cwd, err := os.Getwd()
 	if err != nil {
-		return err
-	}
-	// Check git and the base here, so errors print in the caller's terminal.
-	if _, err := tour.Changes(cwd, t.Base); err != nil {
 		return err
 	}
 	tmp, err := os.CreateTemp("", "zide-tour-*.json")
@@ -125,25 +125,15 @@ func runTourView(args []string) int {
 	return 0
 }
 
-// loadTourView reads `tour-view <file>` (and removes the file) or
-// `tour-view --diff [git diff args]`, and builds the steps.
+// loadTourView reads `tour-view <file>` (and removes the file), and builds
+// the steps.
 func loadTourView(args []string) ([]tour.Item, string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return nil, "", err
 	}
-	if len(args) > 0 && args[0] == "--diff" {
-		hunks, err := tour.GitDiff(cwd, args[1:]...)
-		if err != nil {
-			return nil, "", err
-		}
-		if len(hunks) == 0 {
-			return nil, "", errors.New("no changes")
-		}
-		return tour.Build(tour.DiffTour(hunks, cwd), hunks, cwd), "git diff", nil
-	}
 	if len(args) != 1 {
-		return nil, "", errors.New("usage: zide tour-view <file> | --diff [git diff args]")
+		return nil, "", errors.New("usage: zide tour-view <file>")
 	}
 	data, err := os.ReadFile(args[0])
 	if err != nil {
@@ -156,11 +146,7 @@ func loadTourView(args []string) ([]tour.Item, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	hunks, err := tour.Changes(cwd, t.Base)
-	if err != nil {
-		return nil, "", err
-	}
-	return tour.Build(t, hunks, cwd), t.Title, nil
+	return tour.Build(t, cwd), t.Title, nil
 }
 
 // newModel wires the step model to the editor and harness panes of this tab.

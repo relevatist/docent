@@ -11,7 +11,7 @@ zide joins an editor (Helix), a coding harness (Claude Code, oh-my-pi, codex, ..
 +------------------------+-----------+
 ```
 
-Requirements: Zellij 0.45+, Helix 25.07+, git, Go (to build), fzf (for `zide new`).
+Requirements: Zellij 0.45+, Helix 25.07+, Go (to build), fzf (for `zide new`).
 
 ## Install
 
@@ -92,8 +92,6 @@ zide open --focus README.md    # same, and move focus to the editor
 zide reload                    # reload all editor buffers from disk
 zide tour /tmp/tour.json       # start a guided tour of a change
 zide tour - < /tmp/tour.json   # read the tour from standard input
-zide diff                      # walk through `git diff`, one step per hunk
-zide diff main                 # takes `git diff` arguments
 ```
 
 `zide send` never submits the harness input. You submit it. This requires a harness that enables bracketed paste (Claude Code, omp, and codex do); otherwise a newline in the sent text can submit it.
@@ -102,14 +100,15 @@ WARNING: `zide reload` discards unsaved changes in all editor buffers.
 
 ### Tours
 
-A tour is a JSON file. `base` is a git revision (default `HEAD`); staged and unstaged changes both count. A step without `lines` covers the whole file.
+A tour is a JSON file. Each step has an optional `file`, optional `lines` (needs `file`; without it the step covers the whole file), and an optional `note`. A step needs a `file`, a `note`, or both.
 
 ```json
-{"title": "Retry", "base": "main",
- "steps": [{"file": "a.go", "lines": [1, 40], "note": "New type"}]}
+{"title": "Retry",
+ "steps": [{"note": "## Overview\n\n`Do()` now retries."},
+           {"file": "a.go", "lines": [1, 40], "note": "New `Retry` type"}]}
 ```
 
-zide adds a final step, `Not covered by this tour`, that lists the hunks no step covers.
+The editor shows the step's file at its first line. A step without a file does not move the editor. The tour pane shows the step's position, its file and lines (or the tour title), and its note. The note is Markdown. `diff` code blocks show added and removed lines in color, and `mermaid` code blocks (flowchart, sequence, and ER diagrams) show as text diagrams. If zide cannot draw a diagram, it shows the source and the reason. zide ignores unknown fields, such as `base` from older tours.
 
 Keys in the tour pane:
 
@@ -119,6 +118,10 @@ Keys in the tour pane:
 | `p` | previous step |
 | `o` | open the step in the editor again |
 | `s` | send the step as a reference to the harness |
+| `j` / `k` (`down` / `up`) | scroll one line |
+| `pgdown` / `space` / `ctrl+d` | scroll one page down |
+| `pgup` / `b` / `ctrl+u` | scroll one page up |
+| `g` / `G` | go to the top / bottom of the note |
 | `q` | close the tour |
 
 ## Harness setup
@@ -151,7 +154,7 @@ For `zellij`, zide puts the key between `// zide: begin` and `// zide: end` line
 
 The first time zide changes the config, it keeps the old file as `config.kdl.zide.bak`. zide writes the backup to a temp file and links it into place, so a failed write leaves no partial backup. If `config.kdl.zide.bak` exists, zide does not replace it, because it holds the config from before zide. If the config is a symlink, zide changes the file that it points to.
 
-The agent skill tells the harness how to use `zide open`, `zide reload`, `zide tour`, and `zide diff`. The reload hook and extension run `zide reload --quiet` each time the harness edits a file, so the editor shows the new content. Outside a workstream, `zide reload --quiet` does nothing and exits zero, so it never fails an edit. codex has no reload adapter; the skill tells it to run `zide reload`.
+The agent skill tells the harness how to use `zide open`, `zide reload`, and `zide tour`, and how to write tour notes. The reload hook and extension run `zide reload --quiet` each time the harness edits a file, so the editor shows the new content. Outside a workstream, `zide reload --quiet` does nothing and exits zero, so it never fails an edit. codex has no reload adapter; the skill tells it to run `zide reload`.
 
 To install the Claude Code plugin without the zide installer:
 
