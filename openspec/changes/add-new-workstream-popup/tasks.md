@@ -43,6 +43,11 @@
 - [x] 7.1 Extend `integration_test.go`: launch a workstream for a temp directory, and verify `list-panes` shows that directory as the editor pane `pane_cwd` and that `zide open` still finds the editor pane
 - [ ] 7.2 Manual check in a real session: press `Alt w` in the editor pane, filter to a worktree, choose an alias with a `kind`, confirm; verify the new tab opens, `space z r` sends an `@` ref, `Alt w` on the same directory offers switch and open another, and both work
 
+## 8. Unlimited walk and typed path
+
+- [ ] 8.1 Write failing tests: a repo 5 levels down is a hit; the walk stops when its context is done; the picker shows a batch of hits before the walk ends; stopping the picker ends the walk goroutine. Remove the depth limit, stream hits in batches, and stop the walk when the picker exits; verify the tests pass
+- [ ] 8.2 Write failing tests for the filter: a typed path to an existing directory comes first, also when other directories match, and shows once. Implement it and verify the tests pass
+
 ## Workflow follow-up
 
 - Run `make check` before each commit.

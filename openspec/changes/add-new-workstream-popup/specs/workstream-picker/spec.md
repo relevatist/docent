@@ -37,7 +37,7 @@ The picker SHALL list the recent workstream directories first, most recent at th
 - **THEN** the picker shows an empty list and a hint to set `roots` in the config
 
 ### Requirement: Find repos under roots
-For each directory in `roots` (a leading `~` means the home directory), zide SHALL list each directory that has a `.git` entry (directory or file), down to 3 levels below the root. zide SHALL NOT look inside a directory it listed. A root that does not exist SHALL be ignored.
+For each directory in `roots` (a leading `~` means the home directory), zide SHALL list each directory that has a `.git` entry (directory or file), at any depth below the root. zide SHALL NOT look inside a directory it listed, a hidden directory, or a symlink below the root. A root that does not exist SHALL be ignored. The picker SHALL show the repos while the walk runs, and SHALL stop the walk when it exits.
 
 #### Scenario: Worktree two levels down
 - **WHEN** `roots = ["~/wt"]` and `~/wt/retry/app/.git` is a file
@@ -47,9 +47,13 @@ For each directory in `roots` (a leading `~` means the home directory), zide SHA
 - **WHEN** `~/src/app` is a repo and `~/src/app/vendor/x/.git` exists
 - **THEN** the picker lists `~/src/app` and not `~/src/app/vendor/x`
 
-#### Scenario: Too deep
-- **WHEN** `roots = ["~/src"]` and the only repo is `~/src/a/b/c/d`
-- **THEN** the picker does not list it
+#### Scenario: Deep repo
+- **WHEN** `roots = ["~/src"]` and the only repo is `~/src/a/b/c/d/e`
+- **THEN** the picker lists `~/src/a/b/c/d/e`
+
+#### Scenario: Results while walking
+- **WHEN** the walk under `roots` has found `~/src/app` and has not ended
+- **THEN** the picker lists `~/src/app` and shows that the search continues
 
 ### Requirement: Filter directories
 Typed text SHALL filter the directory list with a fuzzy match on the path: each typed character SHALL appear in the path in the same order. Matching SHALL ignore case. The filter SHALL keep the list order. `up`/`down` (and `ctrl+p`/`ctrl+n`) SHALL move the selection.
@@ -59,8 +63,8 @@ Typed text SHALL filter the directory list with a fuzzy match on the path: each 
 - **THEN** only `~/wt/retry/app` is listed
 
 #### Scenario: Typed path
-- **WHEN** no listed directory matches the text and the text is a path to an existing directory
-- **THEN** the picker offers that directory as the only choice
+- **WHEN** the text is a path to an existing directory (absolute, relative to the current directory, or starting with `~`)
+- **THEN** the picker offers that directory first, also when other directories match, and lists it once
 
 ### Requirement: Choose the harness
 The picker SHALL have a harness field that takes a harness command with args, or an alias name from the config. `tab` SHALL move focus between the directory filter and the harness field. In the harness field, `up`/`down` SHALL cycle through the candidates: the harness of the current tab, then the config aliases in name order, then `claude`, `omp`, `codex`, with each value once. The field SHALL start with the harness of the current tab, or the config `harness` when zide cannot find one.
