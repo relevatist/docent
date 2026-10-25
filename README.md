@@ -11,7 +11,7 @@ zide joins an editor (Helix), a coding harness (Claude Code, oh-my-pi, codex, ..
 +------------------------+-----------+
 ```
 
-Requirements: Zellij 0.45+, Helix 25.07+, git, Go (to build).
+Requirements: Zellij 0.45+, Helix 25.07+, git, Go (to build), fzf (for `zide new`).
 
 ## Install
 
@@ -36,7 +36,8 @@ zide new                   # inside Zellij: pick a directory and a harness
 - The tab (or session) name is `--name`, or the directory basename.
 - zide opens only directories that exist. It never creates directories or git worktrees.
 - For more workstreams, open one tab per project or worktree. Each zide command acts only on the panes in its own tab.
-- `zide new` shows a picker. Type to filter the directories: the recent directories come first, then the git repos and worktrees under `roots` (they show while the search runs). If you type a path to a directory (it starts with `/`, `~/`, `./` or `../`, or is `~`, `.` or `..`), it comes first in the list. `tab` moves to the harness field, and `up`/`down` there cycles the harnesses and aliases. `enter` opens the tab. `esc` cancels.
+- `zide new` shows the directories in fzf: the recent directories, then the git repos and worktrees under `roots`, then each directory under `~` (hidden directories, `node_modules` and `~/Library` skipped). With an empty query, the recent directories come first. When you type, fzf ranks the results. The list fills while the search runs. If you typed a path to a directory that exists (it starts with `/`, `~/`, `./` or `../`, or is `~`, `.` or `..`), `enter` opens it, also when other directories match. `enter` opens the tab with the harness of the current tab (or the config `harness`). `alt-enter` first asks for the harness: pick one, or type a command with args. Typed text with a space is always used as the command. `esc` cancels.
+- On macOS, the first `zide new` can show privacy prompts for folders such as Documents, Desktop and Downloads, because zide lists the directories under `~`.
 - If the directory is already open in a tab, `zide new` asks if you want to go to that tab or open another tab (`app-2`, `app-3`, ...). zide finds that tab from the working directory of its editor pane. After `:cd` in Helix, zide does not find it.
 - zide keeps the recent directories in `~/.local/state/zide/recent.toml` (or `$XDG_STATE_HOME/zide/recent.toml`).
 
@@ -45,7 +46,7 @@ Config file `~/.config/zide/config.toml` (all keys optional):
 ```toml
 harness = "claude"         # harness command or alias; --harness overrides it for one tab
 focus_on_send = true       # move focus to the harness after `zide send`
-roots = ["~/src", "~/wt"]  # where `zide new` looks for git repos and worktrees
+roots = ["~/src", "~/wt"]  # `zide new` lists the git repos and worktrees here before other directories
 
 [harnesses.omp-sandbox]    # harness alias: use `--harness omp-sandbox`
 command = "sandbox-exec -f ~/omp.sb omp"
@@ -54,7 +55,7 @@ kind = "omp"               # optional; default: base name of the first word of c
 
 `kind` is the harness that the command runs. `zide send ref` uses it to format references, so a wrapped harness still gets `@` references. `kind` must be one word.
 
-zide expands a leading `~` in `roots` and in each word of a harness command (an alias `command`, the `harness` key, `--harness`, or the `zide new` harness field). Zellij runs the command without a shell, so other shell syntax does not work.
+zide expands a leading `~` in `roots` and in each word of a harness command (an alias `command`, the `harness` key, `--harness`, or a command typed in the `zide new` harness list). Zellij runs the command without a shell, so other shell syntax does not work.
 
 A root can be a symlink. zide does not follow symlinks below a root.
 
