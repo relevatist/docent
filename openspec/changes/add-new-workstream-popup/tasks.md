@@ -2,8 +2,8 @@
 
 ## 1. Verify Zellij behavior
 
-- [ ] 1.1 In a background Zellij 0.45 session, open a pane with `command="/usr/bin/env"` and args `"ZIDE_DIR=/tmp/a b" "hx"`. Verify that `list-panes --all --json` shows the full argv in `terminal_command`, and record the exact format in design.md. If the args are missing, stop and ask the user (see design.md - Risks)
-- [ ] 1.2 In the same session, verify that `zellij action new-tab` run from a floating pane focuses the new tab, and that a `close_on_exit` floating pane closes in the old tab. Record the result in design.md
+- [x] 1.1 In a background Zellij 0.45 session, open a pane with `command="/usr/bin/env"` and args `"ZIDE_DIR=/tmp/a b" "hx"`. Verify that `list-panes --all --json` shows the full argv in `terminal_command`, and record the exact format in design.md. If the args are missing, stop and ask the user (see design.md - Risks)
+- [x] 1.2 In the same session, verify that `zellij action new-tab` run from a floating pane focuses the new tab, and that a `close_on_exit` floating pane closes in the old tab. Record the result in design.md
 
 ## 2. Harness aliases and kind
 

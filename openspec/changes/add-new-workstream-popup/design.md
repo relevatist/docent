@@ -4,8 +4,9 @@
 
 See proposal.md - Why. Facts checked on the target machine (Zellij 0.45.1):
 
-- `zellij action list-panes --all --json` has no cwd field. It has `terminal_command`, `title`, `tab_id`, `tab_name`. In a live tab it shows `hx` and `claude` for the editor and harness panes. Not yet checked: whether `terminal_command` includes the args.
-- `zellij action go-to-tab-by-id <id>` exists.
+- `zellij action list-panes --all --json` has no cwd field. It has `terminal_command`, `title`, `tab_id`, `tab_name`. In a live tab it shows `hx` and `claude` for the editor and harness panes. `terminal_command` includes the full argv, joined with single spaces, with no quotes or escapes. A pane with `command="/usr/bin/env"` and args `"ZIDE_DIR=/tmp/a b" "hx"` shows `/usr/bin/env ZIDE_DIR=/tmp/a b hx`. A pane with args `"ZIDE_HARNESS_KIND=omp" "sleep" "600"` shows `/usr/bin/env ZIDE_HARNESS_KIND=omp sleep 600`. Plugin panes show `null`, and so does a default shell pane. In that check, terminal panes also had `pane_command` (`hx`, `sleep 600`) and `pane_cwd` (the session's start directory), so the "no cwd field" note above is not true for those panes.
+- `zellij action go-to-tab-by-id <id>` exists. It takes the `tab_id` from `list-panes` or `list-tabs --json` and makes that tab active. An unknown id (`99`) exits 0 and does nothing.
+- `zellij action new-tab --name t2` run from a `--floating --close-on-exit` pane makes the new tab active (`list-tabs --json` shows `"active": true` for it). When the command exits, the floating pane closes and is removed from the old tab. In `list-panes`, `is_focused` is per tab: the old tab's editor pane stays `is_focused: true`, so use `list-tabs --json` `active` to find the active tab.
 - Default keybinds use `Alt c f h i j k l n o p`. `Alt w` is free, and the user's `config.kdl` does not bind it.
 - `BurntSushi/toml` can only encode a whole file, so writing state into `config.toml` would drop user comments.
 - `internal/send.FormatRef` takes the kind from the base name of the first word of the pane command. `panes.Lookup` returns that command.
