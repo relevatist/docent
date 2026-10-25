@@ -17,8 +17,8 @@
 
 ## 3. Recent directories
 
-- [ ] 3.1 Write failing tests for `internal/recent` against a temp `$XDG_STATE_HOME`: missing file gives an empty list; `Add` moves an entry to the top; the limit is 20; the file is written through a rename; `Load` drops nothing (the picker filters deleted directories)
-- [ ] 3.2 Implement `internal/recent` and call `recent.Add` from `launchDir` after `launch.Run` succeeds; a write error prints `zide: warning: ...` with the state file path; verify the 3.1 tests pass and a launch test with an unwritable state directory still exits zero with the warning
+- [x] 3.1 Write failing tests for `internal/recent` against a temp `$XDG_STATE_HOME`: missing file gives an empty list; `Add` moves an entry to the top; the limit is 20; the file is written through a rename; `Load` drops nothing (the picker filters deleted directories)
+- [x] 3.2 Implement `internal/recent` and call `recent.Add` from `launchDir` after `launch.Run` succeeds; a write error prints `zide: warning: ...` with the state file path; verify the 3.1 tests pass and a launch test with an unwritable state directory still exits zero with the warning
 
 ## 4. Directory candidates
 

@@ -48,7 +48,7 @@ func TestIntegrationOpen(t *testing.T) {
 			env = append(env, kv)
 		}
 	}
-	env = append(env, "SHELL=/bin/sh")
+	env = append(env, "SHELL=/bin/sh", "XDG_STATE_HOME="+filepath.Join(tmp, "state"))
 	session := fmt.Sprintf("zide-it-%d", os.Getpid())
 	zj := func(args ...string) (string, error) {
 		cmd := exec.Command("zellij", append([]string{"--session", session}, args...)...)

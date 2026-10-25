@@ -10,6 +10,7 @@ import (
 
 	"github.com/relevatist/zide/internal/config"
 	"github.com/relevatist/zide/internal/launch"
+	"github.com/relevatist/zide/internal/recent"
 	"github.com/relevatist/zide/internal/zellij"
 )
 
@@ -47,7 +48,14 @@ func launchDir(r zellij.Runner, w io.Writer, arg, name, harness string) error {
 	if err != nil {
 		return err
 	}
-	return launch.Run(r, attach, w, dir, name, h, os.Getenv("ZELLIJ") != "")
+	if err := launch.Run(r, attach, w, dir, name, h, os.Getenv("ZELLIJ") != ""); err != nil {
+		return err
+	}
+	if err := recent.Add(dir); err != nil {
+		_, err = fmt.Fprintln(w, "zide: warning:", err)
+		return err
+	}
+	return nil
 }
 
 func attach(dir string, args ...string) error {
