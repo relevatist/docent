@@ -2,14 +2,7 @@
 
 docent joins an editor (Helix), a coding harness (Claude Code, oh-my-pi, codex, ...), and a shell in one Zellij tab. The harness can show you code in the editor and walk you through its changes one step at a time.
 
-```
-+------------------------+-----------+
-|                        | harness   |
-| editor (hx)            +-----------+
-|                        | shell     |
-|                        | [tour]    |
-+------------------------+-----------+
-```
+![docent: Helix on the left, the harness and a tour pane on the right](demo.png)
 
 Requirements: Zellij 0.45+, Helix 25.07+, Go (to build), fzf (for `docent new`).
 
