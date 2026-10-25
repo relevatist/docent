@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -77,7 +78,8 @@ func TestEditZellijConfigRefused(t *testing.T) {
 		{"open block comment", "/* keybinds {\n", "by hand"},
 		{"Alt w bound", "keybinds {\n    normal {\n        bind \"Alt w\" { NewPane; }\n    }\n}\n", `bind "Alt w"`},
 		{"marked node changed", "keybinds {\n" + changed + "}\n", "--force"},
-		{"begin without end", "keybinds {\n    // zide: begin (managed by `zide install`)\n}\n", "by hand"},
+		{"begin without end", "keybinds {\n" + zellijBegin + "}\n", "without a `// zide: end` line"},
+		{"end without begin", "keybinds {\n" + zellijEnd + "}\n", "without a `// zide: end` line"},
 		{"KDL v2 raw string", "keybinds {\n}\nx #\"a\"#\n", "by hand"},
 		{"block comment opens on the keybinds line", "keybinds { /*\n*/\n}\n", "by hand"},
 		{"string opens on the keybinds line", "keybinds { x \"{\n}\"\n}\n", "by hand"},
@@ -232,6 +234,9 @@ func TestInstallZellij(t *testing.T) {
 }
 
 func TestInstallZellijReadOnlyDir(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root can write to a read-only dir")
+	}
 	home := tempHome(t)
 	fakeHarnesses(t, "codex", "zellij")
 	fakeZellij(t, "0")
@@ -257,6 +262,56 @@ func TestInstallZellijReadOnlyDir(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(home, ".agents")); !os.IsNotExist(err) {
 		t.Error("wrote the codex skill although the Zellij dir is read-only")
+	}
+}
+
+func TestInstallZellijBackupFails(t *testing.T) {
+	home := tempHome(t)
+	fakeHarnesses(t, "zellij")
+	fakeZellij(t, "0")
+	cfg := filepath.Join(home, ".config/zellij/config.kdl")
+	writeTestFile(t, cfg, userConfig)
+	writeString = func(f *os.File, s string) (int, error) {
+		n, _ := f.WriteString(s[:len(s)/2])
+		return n, errors.New("disk full")
+	}
+	t.Cleanup(func() { writeString = (*os.File).WriteString })
+	var out, errw bytes.Buffer
+	if code := installCmd([]string{"zellij"}, &out, &errw, false, nil); code == 0 {
+		t.Fatal("want non-zero exit")
+	}
+	if !strings.Contains(errw.String(), "disk full") {
+		t.Errorf("error: %s", errw.String())
+	}
+	if readFile(t, cfg) != userConfig {
+		t.Error("config changed")
+	}
+	if names, _ := filepath.Glob(filepath.Join(filepath.Dir(cfg), "*")); len(names) != 1 {
+		t.Errorf("files left: %v", names)
+	}
+	if _, err := os.Lstat(filepath.Join(filepath.Dir(cfg), "config.kdl.zide.bak")); !os.IsNotExist(err) {
+		t.Error("partial backup left")
+	}
+}
+
+func TestInstallZellijHardLink(t *testing.T) {
+	home := tempHome(t)
+	fakeHarnesses(t, "zellij")
+	fakeZellij(t, "0")
+	cfg := filepath.Join(home, ".config/zellij/config.kdl")
+	writeTestFile(t, cfg, userConfig)
+	if err := os.Link(cfg, filepath.Join(home, "config.kdl")); err != nil {
+		t.Fatal(err)
+	}
+	var out, errw bytes.Buffer
+	if code := installCmd([]string{"zellij"}, &out, &errw, false, nil); code == 0 {
+		t.Fatal("want non-zero exit")
+	}
+	if want := cfg + " has other hard links; zide would split them"; !strings.Contains(errw.String(), want) {
+		t.Errorf("error does not contain %q: %s", want, errw.String())
+	}
+	if readFile(t, cfg) != userConfig {
+		t.Error("config changed")
 	}
 }
 
@@ -289,6 +344,7 @@ func TestInstallZellijRefused(t *testing.T) {
 		{"Alt w bound", "keybinds {\n    bind \"Alt w\" { NewPane; }\n}\n", "0", `bind "Alt w"`},
 		{"check fails", userConfig, "1", "bad config"},
 		{"markers out of order", "keybinds {\n" + zellijEnd + zellijBegin + "}\n", "0", "markers out of order; fix"},
+		{"begin without end", "keybinds {\n" + zellijBegin + "}\n", "0", "(or the reverse); fix"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			home := tempHome(t)

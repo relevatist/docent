@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"syscall"
 
 	"github.com/relevatist/zide/assets"
 )
@@ -24,8 +25,10 @@ const (
 var (
 	systemZellijDir = "/etc/zellij"
 	goos            = runtime.GOOS
+	writeString     = (*os.File).WriteString
 	errByHand       = errors.New(`zide cannot find where to add the key; add the shared_except "locked" node from assets/zellij/keys.kdl to the keybinds block by hand`)
 	errMarkers      = errors.New("more than one zide marker, or markers out of order")
+	errUnpaired     = errors.New("a `// zide: begin` line without a `// zide: end` line (or the reverse)")
 	keybindsLine    = regexp.MustCompile(`^keybinds([\s{]|$)`)
 	keybindsName    = regexp.MustCompile(`(^|[;{}])\s*"?keybinds"?([\s;{}]|$)`)
 	altWBind        = regexp.MustCompile(`\bbind(\s+"[^"]*")*\s+"\s*(?i:alt)\s+w\s*"`)
@@ -90,27 +93,31 @@ func editZellijCode(cfg string, force bool) (string, error) {
 	lines := strings.SplitAfter(cfg, "\n")
 	begin, end, hidden := -1, -1, false
 	for i, l := range lines {
-		var at *int
-		switch strings.TrimSpace(l) {
-		case strings.TrimSpace(zellijBegin):
-			at = &begin
-		case strings.TrimSpace(zellijEnd):
-			at = &end
-		default:
+		l = strings.TrimSpace(l)
+		isBegin := l == strings.TrimSpace(zellijBegin)
+		if !isBegin && l != strings.TrimSpace(zellijEnd) {
 			continue
 		}
 		if i > 0 && open[i-1] {
 			hidden = true
 			continue
 		}
-		if *at >= 0 {
+		switch {
+		case isBegin && begin < 0:
+			begin = i
+		case !isBegin && end < 0:
+			end = i
+		default:
 			return "", errMarkers
 		}
-		*at = i
 	}
+	onlyHidden := begin < 0 && end < 0 && hidden
+	unpaired := (begin < 0) != (end < 0)
 	switch {
-	case begin < 0 && end < 0 && hidden, (begin < 0) != (end < 0):
+	case onlyHidden:
 		return "", errByHand
+	case unpaired:
+		return "", errUnpaired
 	case end < begin:
 		return "", errMarkers
 	}
@@ -152,9 +159,12 @@ func editZellijCode(cfg string, force bool) (string, error) {
 			cfg += nl
 		}
 		return cfg + eol("keybinds {\n"+block+"}\n", nl), nil
-	case depth[keybinds] != 0 || open[keybinds] || !strings.HasSuffix(lines[keybinds], "\n"),
-		!keybindsLine.MatchString(strings.TrimSpace(code[keybinds])),
-		!strings.HasSuffix(strings.TrimSpace(code[keybinds]), "{"):
+	}
+	kb := strings.TrimSpace(code[keybinds])
+	topLevel := depth[keybinds] == 0 && !open[keybinds]
+	endsLine := strings.HasSuffix(lines[keybinds], "\n")
+	opensBlock := keybindsLine.MatchString(kb) && strings.HasSuffix(kb, "{")
+	if !topLevel || !endsLine || !opensBlock {
 		return "", errByHand
 	}
 	return join(lines[:keybinds+1]) + eol(block, lines[keybinds]) + join(lines[keybinds+1:]), nil
@@ -277,13 +287,18 @@ func (z *zellijTarget) check(force bool) string {
 		return err.Error()
 	}
 	z.old, z.exists = string(old), err == nil
-	if z.data, err = editZellijConfig(z.old, force); errors.Is(err, errMarkers) {
+	if z.data, err = editZellijConfig(z.old, force); errors.Is(err, errMarkers) || errors.Is(err, errUnpaired) {
 		return fmt.Sprintf("%v; fix %s by hand", err, path)
 	} else if err != nil {
 		return path + ": " + err.Error()
 	}
 	if z.exists && z.data == z.old {
 		return ""
+	}
+	if fi, err := os.Stat(path); err == nil {
+		if st, ok := fi.Sys().(*syscall.Stat_t); ok && st.Nlink > 1 {
+			return path + " has other hard links; zide would split them. Add the key by hand, or replace the hard link with a symlink."
+		}
 	}
 	if err := checkWritable(filepath.Dir(path)); err != nil {
 		return path + ": " + err.Error()
@@ -326,13 +341,17 @@ func (z *zellijTarget) apply(out io.Writer) error {
 			return err
 		}
 		mode = fi.Mode().Perm()
+		// The link makes a complete backup appear at once, and fails if one
+		// exists.
+		tmp, err := writeTemp(dir, z.old, mode)
+		if err != nil {
+			return err
+		}
 		bak := z.path + ".zide.bak"
 		msg := bak
-		b, err := os.OpenFile(bak, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
-		if err == nil {
-			_, err = b.WriteString(z.old)
-			err = errors.Join(err, b.Close())
-		} else if errors.Is(err, fs.ErrExist) {
+		err = os.Link(tmp, bak)
+		_ = os.Remove(tmp)
+		if errors.Is(err, fs.ErrExist) {
 			msg, err = bak+" kept (it holds the config from before zide)", nil
 		}
 		if err != nil {
@@ -344,12 +363,26 @@ func (z *zellijTarget) apply(out io.Writer) error {
 	} else if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	f, err := os.CreateTemp(dir, ".config.kdl.zide-*")
+	tmp, err := writeTemp(dir, z.data, mode)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = os.Remove(f.Name()) }()
-	_, err = f.WriteString(z.data)
+	defer func() { _ = os.Remove(tmp) }()
+	if err := os.Rename(tmp, z.path); err != nil {
+		return err
+	}
+	_, err = fmt.Fprintln(out, z.path)
+	return err
+}
+
+// writeTemp writes data with mode to a new temp file in dir, syncs it, and
+// returns its name. It removes the file if it fails.
+func writeTemp(dir, data string, mode fs.FileMode) (string, error) {
+	f, err := os.CreateTemp(dir, ".config.kdl.zide-*")
+	if err != nil {
+		return "", err
+	}
+	_, err = writeString(f, data)
 	if err == nil {
 		err = f.Chmod(mode)
 	}
@@ -357,11 +390,8 @@ func (z *zellijTarget) apply(out io.Writer) error {
 		err = f.Sync()
 	}
 	if err := errors.Join(err, f.Close()); err != nil {
-		return err
+		_ = os.Remove(f.Name())
+		return "", err
 	}
-	if err := os.Rename(f.Name(), z.path); err != nil {
-		return err
-	}
-	_, err = fmt.Fprintln(out, z.path)
-	return err
+	return f.Name(), nil
 }
