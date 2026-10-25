@@ -54,7 +54,7 @@ kind = "omp"               # optional; default: base name of the first word of c
 
 `kind` is the harness that the command runs. `zide send ref` uses it to format references, so a wrapped harness still gets `@` references. `kind` must be one word.
 
-zide expands a leading `~` in `roots` and in each word of an alias `command`. Zellij runs the command without a shell, so other shell syntax does not work.
+zide expands a leading `~` in `roots` and in each word of a harness command (an alias `command`, the `harness` key, `--harness`, or the `zide new` harness field). Zellij runs the command without a shell, so other shell syntax does not work.
 
 A root can be a symlink. zide does not follow symlinks below a root.
 

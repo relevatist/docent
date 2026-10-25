@@ -213,3 +213,17 @@ func TestPauseOnError(t *testing.T) {
 		}
 	}
 }
+
+func TestNewTypedHomeCommand(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir, _ := appDir(t)
+	f := newFake(t, "", "/other", "claude")
+	if code := newCmd(f, nil, os.Stderr, pickReturns(tui.Picked{Dir: dir, Harness: "~/bin/box omp"})); code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	want := `"/usr/bin/env" {` + "\n" + `                    args "ZIDE_HARNESS_KIND=box"`
+	if tab := lastNewTab(t, f); strings.Contains(tab[3], want) || !strings.Contains(tab[3], `"`+home+`/bin/box" {`) {
+		t.Errorf("layout\n%s\nwant %s/bin/box with no kind marker", tab[3], home)
+	}
+}

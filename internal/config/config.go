@@ -59,13 +59,9 @@ func Load() (Config, error) {
 			return c, fmt.Errorf("harness alias %q: kind %q must be one word", name, h.Kind)
 		}
 		h.Kind = cmp.Or(h.Kind, kindOf(h.Command))
-		words := strings.Fields(h.Command)
-		for i := range words {
-			if words[i], err = expandHome(words[i]); err != nil {
-				return c, err
-			}
+		if h.Command, err = expandWords(h.Command); err != nil {
+			return c, err
 		}
-		h.Command = strings.Join(words, " ")
 		c.Harnesses[name] = h
 	}
 	for i := range c.Roots {
@@ -88,8 +84,21 @@ func expandHome(p string) (string, error) {
 	return filepath.Join(home, p[1:]), nil
 }
 
+// expandWords applies expandHome to each word of cmd.
+func expandWords(cmd string) (string, error) {
+	words := strings.Fields(cmd)
+	for i := range words {
+		var err error
+		if words[i], err = expandHome(words[i]); err != nil {
+			return cmd, err
+		}
+	}
+	return strings.Join(words, " "), nil
+}
+
 // Resolve returns the alias named s, or s as a plain command whose kind is
-// the base name of its first word.
+// the base name of its first word. It expands a leading ~ in each word of a
+// plain command.
 func (c Config) Resolve(s string) (Harness, error) {
 	if h, ok := c.Harnesses[s]; ok {
 		return h, nil
@@ -97,7 +106,8 @@ func (c Config) Resolve(s string) (Harness, error) {
 	if strings.TrimSpace(s) == "" {
 		return Harness{}, errors.New("harness command is empty")
 	}
-	return Harness{s, kindOf(s)}, nil
+	cmd, err := expandWords(s)
+	return Harness{cmd, kindOf(s)}, err
 }
 
 func kindOf(cmd string) string {

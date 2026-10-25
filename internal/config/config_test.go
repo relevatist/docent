@@ -101,7 +101,7 @@ func TestResolve(t *testing.T) {
 		"codex --yolo":         {"codex --yolo", "codex"},
 		"/usr/bin/aider":       {"/usr/bin/aider", "aider"},
 		"omp-sandbox --x":      {"omp-sandbox --x", "omp-sandbox"},
-		"  fast  ":             {"  fast  ", "fast"},
+		"  fast  ":             {"fast", "fast"},
 		"Fast":                 {"Fast", "Fast"},
 		"/opt/bin/omp-sandbox": {"/opt/bin/omp-sandbox", "omp-sandbox"},
 	} {
@@ -173,5 +173,19 @@ func TestAliasHome(t *testing.T) {
 	want := home + "/bin/box -f " + home + "/omp.sb ~x a~/b " + home + " omp"
 	if got := c.Harnesses["box"]; got.Command != want || got.Kind != "box" {
 		t.Errorf("box = %+v; want command %q", got, want)
+	}
+}
+
+func TestResolveHome(t *testing.T) {
+	write(t, "")
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	c, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := Harness{home + "/bin/box -f " + home + "/omp.sb ~x omp", "box"}
+	if got, err := c.Resolve("~/bin/box -f ~/omp.sb ~x omp"); err != nil || got != want {
+		t.Errorf("Resolve = %+v, %v; want %+v", got, err, want)
 	}
 }
