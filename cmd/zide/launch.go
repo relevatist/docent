@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,7 +15,7 @@ import (
 
 func runLaunch(args []string) int {
 	fs := flag.NewFlagSet("zide", flag.ContinueOnError)
-	harness := fs.String("harness", "", "harness command (overrides config)")
+	harness := fs.String("harness", "", "harness command or alias (overrides config)")
 	name := fs.String("name", "", "tab or session name (default: directory basename)")
 	var usageErr error
 	fs.Usage = func() { usageErr = usage(os.Stderr) }
@@ -25,7 +26,7 @@ func runLaunch(args []string) int {
 		fs.Usage()
 		return 2
 	}
-	err := launchDir(fs.Arg(0), *name, *harness)
+	err := launchDir(zellij.Exec{}, os.Stderr, fs.Arg(0), *name, *harness)
 	if err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "zide:", err)
 		return 1
@@ -33,7 +34,7 @@ func runLaunch(args []string) int {
 	return 0
 }
 
-func launchDir(arg, name, harness string) error {
+func launchDir(r zellij.Runner, w io.Writer, arg, name, harness string) error {
 	dir, err := filepath.Abs(arg)
 	if err != nil {
 		return err
@@ -42,7 +43,11 @@ func launchDir(arg, name, harness string) error {
 	if err != nil {
 		return err
 	}
-	return launch.Run(zellij.Exec{}, attach, os.Stderr, dir, name, c.WithHarness(harness).Harness, os.Getenv("ZELLIJ") != "")
+	h, err := c.Resolve(c.WithHarness(harness).Harness)
+	if err != nil {
+		return err
+	}
+	return launch.Run(r, attach, w, dir, name, h.Command, os.Getenv("ZELLIJ") != "")
 }
 
 func attach(dir string, args ...string) error {
