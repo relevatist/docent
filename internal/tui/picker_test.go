@@ -189,17 +189,18 @@ func TestPickerWhileWalking(t *testing.T) {
 func TestPickerStopWalk(t *testing.T) {
 	root := t.TempDir()
 	mkdirs(t, root, "a/.git", "b/.git", "c/.git")
-	p, _ := newPicker(t, PickerInput{Harness: "claude", Roots: []string{root}})
-	p.Init()
-	<-p.hits
-	time.Sleep(50 * time.Millisecond) // let the walk block on the next hit
-	stopped := make(chan struct{})
-	go func() {
-		p.stop()
-		close(stopped)
-	}()
+	var p *picker
+	_, ok, err := pickWorkstream(PickerInput{Harness: "claude", Roots: []string{root}}, func(m tea.Model) error {
+		p = m.(*picker)
+		p.Init()
+		<-p.hits
+		return nil
+	})
+	if ok || err != nil {
+		t.Fatalf("pickWorkstream = %v, %v; want a cancel", ok, err)
+	}
 	select {
-	case <-stopped:
+	case <-p.walked:
 	case <-time.After(5 * time.Second):
 		t.Fatal("walk did not stop")
 	}

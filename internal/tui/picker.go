@@ -49,9 +49,16 @@ type Picked struct {
 
 // PickWorkstream shows the picker. ok is false when the user cancels.
 func PickWorkstream(in PickerInput) (Picked, bool, error) {
+	return pickWorkstream(in, func(m tea.Model) error {
+		_, err := tea.NewProgram(m).Run()
+		return err
+	})
+}
+
+func pickWorkstream(in PickerInput, run func(tea.Model) error) (Picked, bool, error) {
 	p := newPickerModel(in)
 	defer p.stop()
-	if _, err := tea.NewProgram(p).Run(); err != nil {
+	if err := run(p); err != nil {
 		return Picked{}, false, err
 	}
 	picked, ok := p.result()
@@ -68,6 +75,7 @@ type picker struct {
 	in             PickerInput
 	home           string
 	dirs           []string
+	seen           map[string]bool // the dirs, for dedup
 	walking        bool
 	query, harness string
 	onHarness      bool
@@ -79,43 +87,47 @@ type picker struct {
 	done           bool
 	height         int
 	hits           <-chan string
-	stop           func() // ends the walk and waits for it
+	ctx            context.Context
+	stop           func()        // cancels the walk
+	walked         chan struct{} // closed when the walk goroutine returns
 }
 
 func newPickerModel(in PickerInput) *picker {
 	home, _ := os.UserHomeDir()
-	return &picker{
+	ctx, cancel := context.WithCancel(context.Background())
+	p := &picker{
 		in:      in,
 		home:    home,
 		dirs:    recent.Candidates(in.Recent, nil),
+		seen:    map[string]bool{},
 		walking: len(in.Roots) > 0,
 		harness: in.Harness,
-		stop:    func() {},
+		ctx:     ctx,
+		stop:    cancel,
 	}
+	for _, d := range p.dirs {
+		p.seen[d] = true
+	}
+	return p
 }
 
 func (p *picker) Init() tea.Cmd {
 	if !p.walking {
 		return nil
 	}
-	ctx, cancel := context.WithCancel(context.Background())
 	hits, walked := make(chan string), make(chan struct{})
 	go func() {
 		defer close(walked)
 		defer close(hits)
-		for d := range recent.Repos(ctx, p.in.Roots) {
+		for d := range recent.Repos(p.ctx, p.in.Roots) {
 			select {
 			case hits <- d:
-			case <-ctx.Done():
+			case <-p.ctx.Done():
 				return
 			}
 		}
 	}()
-	p.hits = hits
-	p.stop = func() {
-		cancel()
-		<-walked
-	}
+	p.hits, p.walked = hits, walked
 	return p.next
 }
 
@@ -148,7 +160,8 @@ func (p *picker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		p.height = msg.Height
 	case reposMsg:
 		for _, d := range msg.dirs {
-			if !slices.Contains(p.dirs, d) {
+			if !p.seen[d] {
+				p.seen[d] = true
 				p.dirs = append(p.dirs, d)
 			}
 		}
