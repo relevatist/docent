@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/relevatist/zide/internal/zellij"
 )
@@ -71,4 +73,34 @@ func Lookup(r zellij.Runner, name string) (Pane, error) {
 		}
 	}
 	return Pane{}, fmt.Errorf("no %q pane in this tab", name)
+}
+
+// KindVar is the variable that a zide layout sets on a harness pane whose
+// kind differs from the base name of its command.
+const KindVar = "ZIDE_HARNESS_KIND"
+
+// Marker returns the kind in an `env ZIDE_HARNESS_KIND=kind cmd...` pane command.
+func Marker(cmd string) (string, bool) {
+	kind, _, ok := unwrap(cmd)
+	return kind, ok
+}
+
+// Unwrap returns cmd without a leading `env ZIDE_HARNESS_KIND=kind`.
+func Unwrap(cmd string) string {
+	if _, rest, ok := unwrap(cmd); ok {
+		return rest
+	}
+	return cmd
+}
+
+// unwrap splits on single spaces: list-panes joins the argv with spaces and
+// no quotes, and the kind is one word.
+func unwrap(cmd string) (kind, rest string, ok bool) {
+	env, rest, _ := strings.Cut(cmd, " ")
+	kv, rest, _ := strings.Cut(rest, " ")
+	kind, ok = strings.CutPrefix(kv, KindVar+"=")
+	if filepath.Base(env) != "env" || !ok || kind == "" || rest == "" {
+		return "", "", false
+	}
+	return kind, rest, true
 }

@@ -89,3 +89,24 @@ func TestLookupCommand(t *testing.T) {
 		t.Errorf("Lookup = %+v, %v; want no command", got, err)
 	}
 }
+
+func TestMarker(t *testing.T) {
+	tests := []struct{ cmd, kind, rest string }{
+		{"", "", ""},
+		{"claude", "", "claude"},
+		{"/opt/bin/omp --model x", "", "/opt/bin/omp --model x"},
+		{"/usr/bin/env ZIDE_HARNESS_KIND=omp sandbox-exec -f omp.sb omp", "omp", "sandbox-exec -f omp.sb omp"},
+		{"env ZIDE_HARNESS_KIND=omp omp", "omp", "omp"},
+		{"/usr/bin/env FOO=1 omp", "", "/usr/bin/env FOO=1 omp"},
+		{"/usr/bin/env ZIDE_HARNESS_KIND=omp", "", "/usr/bin/env ZIDE_HARNESS_KIND=omp"},
+	}
+	for _, tt := range tests {
+		kind, ok := Marker(tt.cmd)
+		if kind != tt.kind || ok != (tt.kind != "") {
+			t.Errorf("Marker(%q) = %q, %v; want %q", tt.cmd, kind, ok, tt.kind)
+		}
+		if got := Unwrap(tt.cmd); got != tt.rest {
+			t.Errorf("Unwrap(%q) = %q; want %q", tt.cmd, got, tt.rest)
+		}
+	}
+}
