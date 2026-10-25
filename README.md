@@ -36,7 +36,7 @@ zide new                   # inside Zellij: pick a directory and a harness
 - The tab (or session) name is `--name`, or the directory basename.
 - zide opens only directories that exist. It never creates directories or git worktrees.
 - For more workstreams, open one tab per project or worktree. Each zide command acts only on the panes in its own tab.
-- `zide new` shows a picker. Type to filter the directories: the recent directories come first, then the git repos and worktrees under `roots` (they show while the search runs). If you type a path to a directory, it comes first in the list. `tab` moves to the harness field, and `up`/`down` there cycles the harnesses and aliases. `enter` opens the tab. `esc` cancels.
+- `zide new` shows a picker. Type to filter the directories: the recent directories come first, then the git repos and worktrees under `roots` (they show while the search runs). If you type a path to a directory (it starts with `/`, `~/`, `./` or `../`), it comes first in the list. `tab` moves to the harness field, and `up`/`down` there cycles the harnesses and aliases. `enter` opens the tab. `esc` cancels.
 - If the directory is already open in a tab, `zide new` asks if you want to go to that tab or open another tab (`app-2`, `app-3`, ...). zide finds that tab from the working directory of its editor pane. After `:cd` in Helix, zide does not find it.
 - zide keeps the recent directories in `~/.local/state/zide/recent.toml` (or `$XDG_STATE_HOME/zide/recent.toml`).
 

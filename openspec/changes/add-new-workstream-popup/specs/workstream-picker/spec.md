@@ -63,8 +63,12 @@ Typed text SHALL filter the directory list with a fuzzy match on the path: each 
 - **THEN** only `~/wt/retry/app` is listed
 
 #### Scenario: Typed path
-- **WHEN** the text is a path to an existing directory (absolute, relative to the current directory, or starting with `~`)
+- **WHEN** the text is a path to an existing directory, and starts with `/`, `~/`, `./` or `../`, or is `~`, `.` or `..`
 - **THEN** the picker offers that directory first, also when other directories match, and lists it once
+
+#### Scenario: Plain word is not a path
+- **WHEN** the current directory has a subdirectory `internal`, and the user types `internal`
+- **THEN** the picker does not offer that subdirectory first, and `internal` is only a fuzzy query
 
 ### Requirement: Choose the harness
 The picker SHALL have a harness field that takes a harness command with args, or an alias name from the config. `tab` SHALL move focus between the directory filter and the harness field. In the harness field, `up`/`down` SHALL cycle through the candidates: the harness of the current tab, then the config aliases in name order, then `claude`, `omp`, `codex`, with each value once. The field SHALL start with the harness of the current tab, or the config `harness` when zide cannot find one.

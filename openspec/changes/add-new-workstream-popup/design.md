@@ -92,7 +92,7 @@ tab: field  up/down: move or cycle  enter: open  esc: cancel
 ```
 
 - No new dependency. The text fields are a string and a cursor at the end: runes append and `backspace` deletes. `bubbles/textinput` is not needed for one-line input with no cursor movement.
-- The model gets the recent list at start, and the root walk runs in a goroutine that sends hits on a channel. A `tea.Cmd` reads the next batch (up to 100 hits, or the hits in 50ms after the first). So the recent list shows at once, and the repos append while the walk runs. When the picker exits, it cancels the walk and waits for the goroutine to return.
+- The model gets the recent list at start, and the root walk runs in a goroutine that sends hits on a channel. A `tea.Cmd` reads the next batch (up to 100 hits, or the hits in 50ms after the first). So the recent list shows at once, and the repos append while the walk runs. When the picker exits, it cancels the walk and does not wait for the goroutine, so a slow `ReadDir` (for example on a network mount) does not delay the exit. The goroutine returns when the walk sees the cancel.
 - The picker returns a result (`dir`, harness string, open/switch/another). `cmd/zide/new.go` does all the Zellij calls, so the model tests do not need a fake runner.
 - Open-tab prompt: after `enter`, `new.go` checks the `pane_cwd` of each `editor` pane. If one matches, the picker shows a second screen with `switch` / `open another`. To keep this in one program, the model gets an `isOpen(dir) (tab string, ok bool)` func at start.
 
