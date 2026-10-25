@@ -11,10 +11,24 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/relevatist/zide/internal/panes"
 )
 
-// TestIntegrationOpen starts a real workstream session and runs `zide open`
-// from its shell pane.
+// sessionRunner runs zellij against one session with env.
+type sessionRunner struct {
+	session string
+	env     []string
+}
+
+func (r sessionRunner) Run(args ...string) ([]byte, error) {
+	cmd := exec.Command("zellij", append([]string{"--session", r.session}, args...)...)
+	cmd.Env = r.env
+	return cmd.Output()
+}
+
+// TestIntegrationOpen starts a real workstream session with a harness alias,
+// checks the panes that zide new reads, and runs `zide open` from the shell pane.
 func TestIntegrationOpen(t *testing.T) {
 	if testing.Short() {
 		t.Skip("short mode")
@@ -41,6 +55,15 @@ func TestIntegrationOpen(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	cfg := filepath.Join(tmp, "config")
+	if err := os.MkdirAll(filepath.Join(cfg, "zide"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	toml := "[harnesses.sandboxed]\ncommand = \"cat\"\nkind = \"omp\"\n"
+	if err := os.WriteFile(filepath.Join(cfg, "zide", "config.toml"), []byte(toml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
 	// Outside Zellij, so zide creates a session instead of a tab in ours.
 	var env []string
 	for _, kv := range os.Environ() {
@@ -48,7 +71,7 @@ func TestIntegrationOpen(t *testing.T) {
 			env = append(env, kv)
 		}
 	}
-	env = append(env, "SHELL=/bin/sh", "XDG_STATE_HOME="+filepath.Join(tmp, "state"))
+	env = append(env, "SHELL=/bin/sh", "XDG_STATE_HOME="+filepath.Join(tmp, "state"), "XDG_CONFIG_HOME="+cfg)
 	session := fmt.Sprintf("zide-it-%d", os.Getpid())
 	zj := func(args ...string) (string, error) {
 		cmd := exec.Command("zellij", append([]string{"--session", session}, args...)...)
@@ -58,7 +81,7 @@ func TestIntegrationOpen(t *testing.T) {
 	}
 
 	// zellij needs a terminal client to spawn panes; script gives it one.
-	launch := []string{zide, "--name", session, "--harness", "cat", dir}
+	launch := []string{zide, "--name", session, "--harness", "sandboxed", dir}
 	scriptArgs := append([]string{"-q", "/dev/null"}, launch...)
 	if runtime.GOOS == "linux" {
 		// ponytail: joined without quoting; temp paths have no spaces.
@@ -75,6 +98,9 @@ func TestIntegrationOpen(t *testing.T) {
 		IsPlugin bool   `json:"is_plugin"`
 		Exited   bool   `json:"exited"`
 		Title    string `json:"title"`
+		TabName  string `json:"tab_name"`
+		Command  string `json:"terminal_command"`
+		Cwd      string `json:"pane_cwd"`
 	}
 	listPanes := func() ([]pane, error) {
 		out, err := zj("action", "list-panes", "--all", "--json")
@@ -143,6 +169,37 @@ func TestIntegrationOpen(t *testing.T) {
 	})
 	poll("helix to start", func() bool { return strings.Contains(screen(ids["editor"]), "NOR") })
 	poll("shell prompt", func() bool { return strings.TrimSpace(screen(ids["shell"])) != "" })
+
+	realDir, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ids["harness"] == "" {
+		t.Error("no harness pane")
+	}
+	ps, err := listPanes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range ps {
+		switch p.Title {
+		case "editor":
+			if p.TabName != session || p.Cwd != realDir {
+				t.Errorf("editor pane: tab %q, cwd %q; want %q, %q", p.TabName, p.Cwd, session, realDir)
+			}
+		case "harness":
+			if !strings.HasPrefix(p.Command, "/usr/bin/env "+panes.KindVar+"=omp ") {
+				t.Errorf("harness command = %q; want the %s=omp wrapper", p.Command, panes.KindVar)
+			}
+		}
+	}
+	tabs, err := panes.Tabs(sessionRunner{session, env})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.ContainsFunc(tabs, func(tab panes.Tab) bool { return tab.Name == session && tab.Dir == realDir }) {
+		t.Errorf("panes.Tabs = %+v; want tab %q with dir %q", tabs, session, realDir)
+	}
 
 	if out, err := zj("action", "write-chars", "--pane-id", ids["shell"], zide+" open target.txt:17\n"); err != nil {
 		t.Fatalf("write-chars: %v\n%s", err, out)

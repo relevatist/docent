@@ -40,7 +40,7 @@
 
 ## 7. Integration
 
-- [ ] 7.1 Extend `integration_test.go`: launch a workstream for a temp directory, and verify `list-panes` shows that directory as the editor pane `pane_cwd` and that `zide open` still finds the editor pane
+- [x] 7.1 Extend `integration_test.go`: launch a workstream for a temp directory, and verify `list-panes` shows that directory as the editor pane `pane_cwd` and that `zide open` still finds the editor pane
 - [ ] 7.2 Manual check in a real session: press `Alt w` in the editor pane, filter to a worktree, choose an alias with a `kind`, confirm; verify the new tab opens, `space z r` sends an `@` ref, `Alt w` on the same directory offers switch and open another, and both work
 
 ## Workflow follow-up
