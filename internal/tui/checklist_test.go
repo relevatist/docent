@@ -7,7 +7,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-func press(c *checklist, keys ...string) {
+// press sends each key to m: a key name, or one character.
+func press(m tea.Model, keys ...string) {
 	for _, k := range keys {
 		var msg tea.KeyPressMsg
 		switch k {
@@ -17,10 +18,20 @@ func press(c *checklist, keys ...string) {
 			msg = tea.KeyPressMsg{Code: tea.KeyEnter}
 		case "esc":
 			msg = tea.KeyPressMsg{Code: tea.KeyEscape}
+		case "tab":
+			msg = tea.KeyPressMsg{Code: tea.KeyTab}
+		case "up":
+			msg = tea.KeyPressMsg{Code: tea.KeyUp}
+		case "down":
+			msg = tea.KeyPressMsg{Code: tea.KeyDown}
+		case "backspace":
+			msg = tea.KeyPressMsg{Code: tea.KeyBackspace}
+		case "ctrl+c", "ctrl+n", "ctrl+p":
+			msg = tea.KeyPressMsg{Code: rune(k[5]), Mod: tea.ModCtrl}
 		default:
 			msg = tea.KeyPressMsg{Code: rune(k[0]), Text: k}
 		}
-		c.Update(msg)
+		m.Update(msg)
 	}
 }
 

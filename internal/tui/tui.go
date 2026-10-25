@@ -1,4 +1,5 @@
-// Package tui holds the terminal views: the tour pane and the install checklist.
+// Package tui holds the terminal views: the tour pane, the install checklist,
+// and the workstream picker.
 package tui
 
 import (

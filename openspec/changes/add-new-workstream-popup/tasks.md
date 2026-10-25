@@ -28,9 +28,9 @@
 
 ## 5. Picker TUI
 
-- [ ] 5.1 Write failing model tests for the picker in `internal/tui`: typing filters; `up`/`down` and `ctrl+p`/`ctrl+n` move; `tab` moves focus; `up`/`down` in the harness field cycles the deduped candidates in order (current tab, aliases by name, `claude`, `omp`, `codex`); empty harness on `enter` shows an error; `esc` cancels; walk results append to the list; the hint shows when the list is empty and there are no roots
-- [ ] 5.2 Write failing model tests for the open-tab screen: `enter` on a directory for which `isOpen` (from the editor pane `pane_cwd`) returns a tab shows `switch` / `open another`; each choice returns the matching result
-- [ ] 5.3 Implement the picker model; verify the 5.1 and 5.2 tests pass
+- [x] 5.1 Write failing model tests for the picker in `internal/tui`: typing filters; `up`/`down` and `ctrl+p`/`ctrl+n` move; `tab` moves focus; `up`/`down` in the harness field cycles the deduped candidates in order (current tab, aliases by name, `claude`, `omp`, `codex`); empty harness on `enter` shows an error; `esc` cancels; walk results append to the list; the hint shows when the list is empty and there are no roots
+- [x] 5.2 Write failing model tests for the open-tab screen: `enter` on a directory for which `isOpen` (from the editor pane `pane_cwd`) returns a tab shows `switch` / `open another`; each choice returns the matching result
+- [x] 5.3 Implement the picker model; verify the 5.1 and 5.2 tests pass
 
 ## 6. `zide new` command
 
