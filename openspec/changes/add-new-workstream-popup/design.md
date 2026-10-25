@@ -78,7 +78,7 @@ An alias matches only when `s` is exactly its name. Otherwise `s` is a command, 
 dirs = ["/Users/thane/wt/retry/app", "/Users/thane/src/app"]
 ```
 
-`recent.Add(dir)` loads, moves `dir` to the front, cuts the list to 20 entries, and writes through a temp file and rename. `launchDir` calls it after `launch.Run` succeeds, so `zide [dir]` and `zide new` both record. A write error prints a warning and does not fail the launch. Two launches at the same time can lose one entry. This is acceptable for a history list.
+`recent.Add(dir)` loads, moves `dir` to the front, cuts the list to 20 entries, and writes through a temp file and rename. `launchDir` calls it once per launch: outside Zellij just before it attaches (attach blocks until the user detaches), and inside Zellij after the new tab opens. So `zide [dir]` and `zide new` both record. A write error prints a warning and does not fail the launch. Two launches at the same time can lose one entry. This is acceptable for a history list.
 
 ### Picker as a bubbletea model in `internal/tui`
 

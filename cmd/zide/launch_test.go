@@ -41,7 +41,7 @@ func launchInZellij(t *testing.T, cfg, harness string, w io.Writer) string {
 	}
 	t.Setenv("ZELLIJ", "0")
 	f := &zellij.Fake{Out: map[string]string{"--version": "zellij 0.45.1"}}
-	if err := launchDir(f, w, t.TempDir(), "", harness); err != nil {
+	if err := launchDir(f, nil, w, t.TempDir(), "", harness); err != nil {
 		t.Fatal(err)
 	}
 	last := f.Calls[len(f.Calls)-1]
@@ -72,7 +72,7 @@ func TestLaunchRecordsRecent(t *testing.T) {
 	dir := t.TempDir()
 	f := &zellij.Fake{Out: map[string]string{"--version": "zellij 0.45.1"}}
 	var w bytes.Buffer
-	if err := launchDir(f, &w, dir, "", "cat"); err != nil {
+	if err := launchDir(f, nil, &w, dir, "", "cat"); err != nil {
 		t.Fatal(err)
 	}
 	if dirs, err := recent.Load(); err != nil || !slices.Equal(dirs, []string{dir}) {
@@ -94,5 +94,27 @@ func TestLaunchRecentNotWritable(t *testing.T) {
 	p, _ := recent.Path()
 	if !strings.HasPrefix(w.String(), "zide: warning: ") || !strings.Contains(w.String(), p) {
 		t.Errorf("got %q; want a warning that names %s", w.String(), p)
+	}
+}
+
+func TestLaunchRecordsBeforeAttach(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("ZELLIJ", "")
+	dir := t.TempDir()
+	f := &zellij.Fake{Out: map[string]string{"--version": "zellij 0.45.1"}}
+	attached := 0
+	attach := func(string, ...string) error {
+		attached++
+		if dirs, err := recent.Load(); err != nil || !slices.Equal(dirs, []string{dir}) {
+			t.Errorf("recent at attach = %q, %v; want [%s]", dirs, err, dir)
+		}
+		return nil
+	}
+	if err := launchDir(f, attach, io.Discard, dir, "", "cat"); err != nil {
+		t.Fatal(err)
+	}
+	if attached != 1 {
+		t.Errorf("attach called %d times; want 1", attached)
 	}
 }

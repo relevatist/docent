@@ -27,7 +27,7 @@ func runLaunch(args []string) int {
 		fs.Usage()
 		return 2
 	}
-	err := launchDir(zellij.Exec{}, os.Stderr, fs.Arg(0), *name, *harness)
+	err := launchDir(zellij.Exec{}, attach, os.Stderr, fs.Arg(0), *name, *harness)
 	if err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "zide:", err)
 		return 1
@@ -35,7 +35,10 @@ func runLaunch(args []string) int {
 	return 0
 }
 
-func launchDir(r zellij.Runner, w io.Writer, arg, name, harness string) error {
+// launchDir opens the workstream for arg and records it as recent: before
+// attach outside Zellij, as attach blocks until the user detaches, and after
+// the new tab inside Zellij.
+func launchDir(r zellij.Runner, attach launch.Attach, w io.Writer, arg, name, harness string) error {
 	dir, err := filepath.Abs(arg)
 	if err != nil {
 		return err
@@ -48,14 +51,24 @@ func launchDir(r zellij.Runner, w io.Writer, arg, name, harness string) error {
 	if err != nil {
 		return err
 	}
-	if err := launch.Run(r, attach, w, dir, name, h, os.Getenv("ZELLIJ") != ""); err != nil {
+	record := func() error {
+		if err := recent.Add(dir); err != nil {
+			_, err = fmt.Fprintln(w, "zide: warning:", err)
+			return err
+		}
+		return nil
+	}
+	inZellij := os.Getenv("ZELLIJ") != ""
+	recordAndAttach := func(dir string, args ...string) error {
+		if err := record(); err != nil {
+			return err
+		}
+		return attach(dir, args...)
+	}
+	if err := launch.Run(r, recordAndAttach, w, dir, name, h, inZellij); err != nil || !inZellij {
 		return err
 	}
-	if err := recent.Add(dir); err != nil {
-		_, err = fmt.Fprintln(w, "zide: warning:", err)
-		return err
-	}
-	return nil
+	return record()
 }
 
 func attach(dir string, args ...string) error {
