@@ -47,7 +47,7 @@ func launchDir(r zellij.Runner, w io.Writer, arg, name, harness string) error {
 	if err != nil {
 		return err
 	}
-	return launch.Run(r, attach, w, dir, name, h.Command, os.Getenv("ZELLIJ") != "")
+	return launch.Run(r, attach, w, dir, name, h, os.Getenv("ZELLIJ") != "")
 }
 
 func attach(dir string, args ...string) error {

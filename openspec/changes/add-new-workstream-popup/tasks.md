@@ -10,9 +10,9 @@
 - [x] 2.0 Make `launch.Layout` take the tab name and emit `tab name=...`; verify `TestRunOutsideZellij` asserts the layout tab name equals the session name and `TestLayout` asserts the quoted name
 - [x] 2.1 Write failing tests for `config.Load` and `Config.Resolve`: alias with `kind`; alias with default kind from the base name of the first word; plain command; exact name match only; empty `command` and `kind` with spaces give an error that names the alias; `roots` with a leading `~` expands to the home directory
 - [x] 2.2 Implement `[harnesses.<name>]`, `roots`, and `Resolve`; make `runLaunch` resolve `--harness` and `harness`; verify the 2.1 tests pass and a launch test with `--harness omp-sandbox` asserts the alias command in the layout
-- [ ] 2.3 Write failing tests for `panes.Marker` and `panes.Unwrap`: no wrapper, `ZIDE_HARNESS_KIND` wrapper, a command with args after the wrapper
-- [ ] 2.4 Change `launch.Layout` to take a `config.Harness` and the tab name: wrap the harness pane in `/usr/bin/env ZIDE_HARNESS_KIND=<kind>` only when the kind differs from the command's base name; the editor pane stays `hx`; verify the updated `TestLayout*` tests assert both cases and that a plain `claude` harness is not wrapped
-- [ ] 2.5 Make `send` take the kind from `ZIDE_HARNESS_KIND`, else from `Unwrap(cmd)`; verify a send test with a pane command `env ZIDE_HARNESS_KIND=omp sandbox-exec -f omp.sb omp` gives `@a.go:1 `
+- [x] 2.3 Write failing tests for `panes.Marker` and `panes.Unwrap`: no wrapper, `ZIDE_HARNESS_KIND` wrapper, a command with args after the wrapper
+- [x] 2.4 Change `launch.Layout` to take a `config.Harness` and the tab name: wrap the harness pane in `/usr/bin/env ZIDE_HARNESS_KIND=<kind>` only when the kind differs from the command's base name; the editor pane stays `hx`; verify the updated `TestLayout*` tests assert both cases and that a plain `claude` harness is not wrapped
+- [x] 2.5 Make `send` take the kind from `ZIDE_HARNESS_KIND`, else from `Unwrap(cmd)`; verify a send test with a pane command `env ZIDE_HARNESS_KIND=omp sandbox-exec -f omp.sb omp` gives `@a.go:1 `
 - [ ] 2.6 Update the README config section with `[harnesses.<name>]` and `roots`; verify the TOML example parses with a test that loads it
 
 ## 3. Recent directories

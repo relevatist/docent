@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/relevatist/zide/internal/config"
+	"github.com/relevatist/zide/internal/panes"
 	"github.com/relevatist/zide/internal/zellij"
 )
 
@@ -36,12 +38,18 @@ const layout = `layout {
 }
 `
 
-// Layout returns the workstream KDL layout for a tab called name. harness is
-// split on spaces into a command and its args; shell quoting is not supported.
-func Layout(harness, name string) (string, error) {
-	f := strings.Fields(harness)
+// Layout returns the workstream KDL layout for a tab called name. The harness
+// command is split on spaces into a command and its args; shell quoting is not
+// supported. When the harness kind differs from the base name of the command,
+// the pane runs through env with ZIDE_HARNESS_KIND set, so the pane command
+// shows the kind.
+func Layout(harness config.Harness, name string) (string, error) {
+	f := strings.Fields(harness.Command)
 	if len(f) == 0 {
 		return "", errors.New("harness command is empty")
+	}
+	if harness.Kind != "" && harness.Kind != filepath.Base(f[0]) {
+		f = append([]string{"/usr/bin/env", panes.KindVar + "=" + harness.Kind}, f...)
 	}
 	args := ""
 	if len(f) > 1 {
@@ -64,7 +72,7 @@ type Attach func(dir string, args ...string) error
 // Run opens the workstream for the absolute dir: a new tab when inZellij,
 // else a session. Both are called name, or the dir basename if name is empty. If that session is live, the tab is added
 // to it and zide attaches; if it is exited, its record is deleted and a new session starts. It warns on w when zellij is below 0.45.
-func Run(r zellij.Runner, attach Attach, w io.Writer, dir, name, harness string, inZellij bool) (err error) {
+func Run(r zellij.Runner, attach Attach, w io.Writer, dir, name string, harness config.Harness, inZellij bool) (err error) {
 	if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
 		return fmt.Errorf("%s: not a directory", dir)
 	}

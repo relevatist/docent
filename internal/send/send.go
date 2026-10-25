@@ -70,9 +70,9 @@ func Paste(r zellij.Runner, text string, focus bool) error {
 	return paste(r, pane, text, focus)
 }
 
-// PasteRef is Paste for FormatRef(harness, ref). harness is the command the
-// harness pane was started with, so it follows the tab; fallback is used
-// when that pane has no command.
+// PasteRef is Paste for FormatRef(harness, ref). harness is the kind in the
+// harness pane command, or else that command, so it follows the tab; fallback
+// is used when that pane has no command.
 func PasteRef(r zellij.Runner, ref, fallback string, focus bool) error {
 	if _, _, err := parseRef(ref); err != nil {
 		return err
@@ -81,7 +81,11 @@ func PasteRef(r zellij.Runner, ref, fallback string, focus bool) error {
 	if err != nil {
 		return err
 	}
-	text, err := FormatRef(cmp.Or(pane.Command, fallback), ref)
+	harness := cmp.Or(pane.Command, fallback)
+	if kind, ok := panes.Marker(harness); ok {
+		harness = kind
+	}
+	text, err := FormatRef(harness, ref)
 	if err != nil {
 		return err
 	}

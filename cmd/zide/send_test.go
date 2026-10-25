@@ -60,6 +60,8 @@ func TestSend(t *testing.T) {
 		{"ref aider", `harness = "aider --yes"`, "", "", []string{"ref", "src/a.go:10-20"}, [][]string{list, paste("src/a.go:10-20 "), focus}},
 		{"ref tab omp", `harness = "aider"`, "/opt/bin/omp --model x", "", []string{"ref", "a.go:1"}, [][]string{list, paste("@a.go:1 "), focus}},
 		{"ref tab cat", `harness = "claude"`, "cat", "", []string{"ref", "a.go:1"}, [][]string{list, paste("a.go:1 "), focus}},
+		{"ref tab kind", `harness = "aider"`, "env ZIDE_HARNESS_KIND=omp sandbox-exec -f omp.sb omp", "", []string{"ref", "a.go:1"}, [][]string{list, paste("@a.go:1 "), focus}},
+		{"ref config alias", "harness = \"box\"\n[harnesses.box]\ncommand = \"sandbox-exec omp\"\nkind = \"omp\"\n", "", "", []string{"ref", "a.go:1"}, [][]string{list, paste("@a.go:1 "), focus}},
 		{"ref no focus", "focus_on_send = false", "", "", []string{"ref", "a.go:1"}, [][]string{list, paste("@a.go:1 ")}},
 		{"text", "", "", "x := 1\ny := 2\n", []string{"text"}, [][]string{list, paste("x := 1\ny := 2\n"), focus}},
 		{"text empty", "", "", "", []string{"text"}, nil},

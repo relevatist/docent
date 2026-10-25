@@ -10,11 +10,14 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/relevatist/zide/internal/config"
 	"github.com/relevatist/zide/internal/zellij"
 )
 
+var cat = config.Harness{Command: "cat", Kind: "cat"}
+
 func TestLayout(t *testing.T) {
-	kdl, err := Layout(`omp --model "x"`, `my "app"`)
+	kdl, err := Layout(config.Harness{Command: `omp --model "x"`, Kind: "omp"}, `my "app"`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +39,7 @@ func TestLayout(t *testing.T) {
 }
 
 func TestLayoutNoArgs(t *testing.T) {
-	kdl, err := Layout("claude", "app")
+	kdl, err := Layout(config.Harness{Command: "claude", Kind: "claude"}, "app")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,8 +48,31 @@ func TestLayoutNoArgs(t *testing.T) {
 	}
 }
 
+func TestLayoutKind(t *testing.T) {
+	kdl, err := Layout(config.Harness{Command: "sandbox-exec -f omp.sb omp", Kind: "omp"}, "app")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`pane name="editor" command="hx" size="60%" focus=true`,
+		`pane name="harness" command="/usr/bin/env"`,
+		`args "ZIDE_HARNESS_KIND=omp" "sandbox-exec" "-f" "omp.sb" "omp"`,
+	} {
+		if !strings.Contains(kdl, want) {
+			t.Errorf("layout missing %q:\n%s", want, kdl)
+		}
+	}
+	kdl, err = Layout(config.Harness{Command: "/opt/bin/claude --model x", Kind: "claude"}, "app")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(kdl, "env") || !strings.Contains(kdl, `command="/opt/bin/claude"`) {
+		t.Errorf("harness wrapped although the kind matches:\n%s", kdl)
+	}
+}
+
 func TestLayoutEmptyHarness(t *testing.T) {
-	if _, err := Layout("  ", "app"); err == nil {
+	if _, err := Layout(config.Harness{Command: "  "}, "app"); err == nil {
 		t.Error("want error for empty harness")
 	}
 }
@@ -75,7 +101,7 @@ func run(t *testing.T, name string, inZellij bool, sessions string) (*zellij.Fak
 		return nil
 	}
 	var warn bytes.Buffer
-	err := Run(f, attach, &warn, t.TempDir(), name, "cat", inZellij)
+	err := Run(f, attach, &warn, t.TempDir(), name, cat, inZellij)
 	return f, calls, warn.String(), err
 }
 
@@ -85,7 +111,7 @@ func (failWriter) Write([]byte) (int, error) { return 0, errors.New("write faile
 
 func TestRunWarningWriteFails(t *testing.T) {
 	f := &zellij.Fake{Out: map[string]string{"--version": "zellij 0.44.0"}}
-	if err := Run(f, nil, failWriter{}, t.TempDir(), "", "cat", true); err == nil {
+	if err := Run(f, nil, failWriter{}, t.TempDir(), "", cat, true); err == nil {
 		t.Error("want write error")
 	}
 }
@@ -100,7 +126,7 @@ func TestRunInsideZellij(t *testing.T) {
 	}
 	last := f.Calls[len(f.Calls)-1]
 	dir := last[len(last)-1]
-	kdl, _ := Layout("cat", filepath.Base(dir))
+	kdl, _ := Layout(cat, filepath.Base(dir))
 	want := []string{"action", "new-tab", "--layout-string", kdl, "--name", filepath.Base(dir), "--cwd", dir}
 	if !slices.Equal(last, want) {
 		t.Errorf("got %q, want %q", last, want)
@@ -119,7 +145,7 @@ func TestRunOutsideZellij(t *testing.T) {
 		t.Fatalf("want one attach, got %v", calls)
 	}
 	session := filepath.Base(calls[0].dir)
-	kdl, _ := Layout("cat", session)
+	kdl, _ := Layout(cat, session)
 	want := []string{"--session", session, "--new-session-with-layout", kdl}
 	if !slices.Equal(calls[0].args, want) {
 		t.Errorf("got %q, want %q", calls[0].args, want)
@@ -142,14 +168,14 @@ func TestRunOutsideZellijSessionExists(t *testing.T) {
 	}
 	f.Out = map[string]string{"--version": "zellij 0.45.1", "list-sessions --no-formatting": "x [Created 1s ago] \napp [Created 2s ago] \n"}
 	var warn bytes.Buffer
-	if err := Run(f, attach, &warn, dir, "", "cat", false); err != nil {
+	if err := Run(f, attach, &warn, dir, "", cat, false); err != nil {
 		t.Fatal(err)
 	}
 	if warn.Len() != 0 {
 		t.Errorf("unexpected warning %q", warn.String())
 	}
 	last := f.Calls[len(f.Calls)-1]
-	kdl, _ := Layout("cat", "app")
+	kdl, _ := Layout(cat, "app")
 	want := []string{"--session", "app", "action", "new-tab", "--layout-string", kdl, "--name", "app", "--cwd", dir}
 	if !slices.Equal(last, want) {
 		t.Errorf("got %q, want %q", last, want)
@@ -205,7 +231,7 @@ func TestSessionState(t *testing.T) {
 }
 
 func TestRunOutsideZellijSessions(t *testing.T) {
-	kdl, _ := Layout("cat", "app")
+	kdl, _ := Layout(cat, "app")
 	for _, tc := range []struct {
 		sessions string
 		calls    [][]string
@@ -234,7 +260,7 @@ func TestRunOutsideZellijSessions(t *testing.T) {
 			t.Fatal(err)
 		}
 		var stderr bytes.Buffer
-		if err := Run(f, attach, &stderr, dir, "", "cat", false); err != nil {
+		if err := Run(f, attach, &stderr, dir, "", cat, false); err != nil {
 			t.Fatal(err)
 		}
 		want := append([][]string{{"--version"}, {"list-sessions", "--no-formatting"}}, tc.calls...)
@@ -258,7 +284,7 @@ func TestRunOutsideZellijSessions(t *testing.T) {
 func TestRunMissingDir(t *testing.T) {
 	f := &zellij.Fake{}
 	attach := func(string, ...string) error { t.Error("attach called"); return nil }
-	err := Run(f, attach, io.Discard, "/no/such/dir", "", "cat", true)
+	err := Run(f, attach, io.Discard, "/no/such/dir", "", cat, true)
 	if err == nil || !strings.Contains(err.Error(), "/no/such/dir") {
 		t.Errorf("want error naming dir, got %v", err)
 	}
