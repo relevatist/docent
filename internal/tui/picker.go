@@ -23,7 +23,7 @@ type PickerInput struct {
 	Recent  []string // absolute directories, most recent first
 	Roots   []string // searched for git repos after the picker shows
 	Harness string   // first value of the harness field
-	Aliases []string // config harness alias names
+	Aliases []string // config harness alias names, in any order
 	// IsOpen returns the name of a tab that has dir open.
 	IsOpen func(dir string) (tab string, ok bool)
 }
@@ -155,9 +155,7 @@ func (p *picker) move(step int) {
 	}
 	hs := p.harnesses()
 	i := slices.Index(hs, p.harness)
-	if i < 0 && step > 0 {
-		i = -1
-	} else if i < 0 {
+	if i < 0 && step < 0 {
 		i = 0
 	}
 	p.harness = hs[(i+step+len(hs))%len(hs)]
