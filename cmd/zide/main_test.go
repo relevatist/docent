@@ -13,7 +13,7 @@ func TestUsageListsSubcommands(t *testing.T) {
 	if err := usage(&b); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"open", "reload", "send", "tour", "tour-view", "diff", "install", "[dir]"} {
+	for _, name := range []string{"open", "reload", "send", "tour", "tour-view", "diff", "install", "new", "[dir]"} {
 		if !strings.Contains(b.String(), name) {
 			t.Errorf("usage missing %q:\n%s", name, b.String())
 		}
@@ -21,7 +21,7 @@ func TestUsageListsSubcommands(t *testing.T) {
 }
 
 func TestDispatch(t *testing.T) {
-	for _, name := range []string{"open", "reload", "send", "tour", "tour-view", "diff", "install"} {
+	for _, name := range []string{"open", "reload", "send", "tour", "tour-view", "diff", "install", "new"} {
 		if commands[name].run == nil {
 			t.Errorf("no handler for %q", name)
 		}
@@ -45,6 +45,7 @@ func TestOutputWriteFails(t *testing.T) {
 		"diff":           func(w io.Writer) int { return diffCmd(f, nil, w, io.Discard) },
 		"install codex":  func(w io.Writer) int { return installCmd([]string{"codex"}, w, io.Discard, false, nil) },
 		"install --help": func(w io.Writer) int { return installCmd([]string{"--help"}, io.Discard, w, false, nil) },
+		"new --help":     func(w io.Writer) int { return newCmd(f, []string{"--help"}, w, nil) },
 		"open --help":    func(w io.Writer) int { return openCmd(f, []string{"--help"}, w) },
 		"reload --help":  func(w io.Writer) int { return reloadCmd(f, []string{"--help"}, w) },
 		"tour --help":    func(w io.Writer) int { return tourCmd(f, []string{"--help"}, nil, w) },

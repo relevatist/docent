@@ -22,6 +22,7 @@ var commands = map[string]command{
 	"tour":      {runTour, "tour <file|->\tstart a guided tour of a change"},
 	"tour-view": {runTourView, "tour-view <file>\trun the tour pane (internal)"},
 	"diff":      {runDiff, "diff [git diff args]\twalk through git diff hunks"},
+	"new":       {runNew, "new\tpick a directory and open a workstream tab (inside Zellij)"},
 	"install":   {runInstall, "install [claude|codex|omp]... [--force]\tinstall zide for coding harnesses"},
 }
 

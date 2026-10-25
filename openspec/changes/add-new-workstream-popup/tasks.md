@@ -34,8 +34,8 @@
 
 ## 6. `zide new` command
 
-- [ ] 6.1 Write failing CLI tests with `zellij.Fake`: outside Zellij prints the error and exits non-zero before the picker runs; the default harness comes from the current tab's harness pane, else from the config; `open` calls `new-tab` with the resolved layout; `switch` calls `go-to-tab-by-id <tab_id>`; `open another` uses the first free `-N` suffix from the `tab_name` values
-- [ ] 6.2 Implement `cmd/zide/new.go` and add `new` to the dispatch table and the usage text; verify the 6.1 tests pass and `main_test.go` lists `new`
+- [x] 6.1 Write failing CLI tests with `zellij.Fake`: outside Zellij prints the error and exits non-zero before the picker runs; the default harness comes from the current tab's harness pane, else from the config; `open` calls `new-tab` with the resolved layout; `switch` calls `go-to-tab-by-id <tab_id>`; `open another` uses the first free `-N` suffix from the `tab_name` values
+- [x] 6.2 Implement `cmd/zide/new.go` and add `new` to the dispatch table and the usage text; verify the 6.1 tests pass and `main_test.go` lists `new`
 - [ ] 6.3 Add `assets/zellij/keys.kdl` with the `Alt w` bind and a README section "Zellij key" next to "Helix keys"; verify `zellij setup --check` accepts a config that includes the snippet
 
 ## 7. Integration
