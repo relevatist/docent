@@ -163,7 +163,7 @@ func TestPickerCancel(t *testing.T) {
 func TestPickerWalk(t *testing.T) {
 	root := t.TempDir()
 	repo := mkdirs(t, root, "repo/.git")[0]
-	p, dirs := newPicker(t, PickerInput{Harness: "claude", Roots: []string{root}})
+	p, dirs := newPicker(t, PickerInput{Harness: "claude", Roots: []string{root, root}})
 	cmd := p.Init()
 	if cmd == nil {
 		t.Fatal("no walk command")
