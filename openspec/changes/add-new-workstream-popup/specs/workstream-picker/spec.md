@@ -77,6 +77,10 @@ The picker SHALL have a harness field that takes a harness command with args, or
 - **WHEN** the user types `claude --model opus` in the harness field and confirms
 - **THEN** the harness pane of the new tab runs `claude --model opus`
 
+#### Scenario: Typed command in the home directory
+- **WHEN** the user types `~/bin/box omp` in the harness field and confirms
+- **THEN** the harness pane of the new tab runs `box` from the `bin` directory in the home directory, with the arg `omp`
+
 #### Scenario: Empty harness
 - **WHEN** the harness field is empty and the user presses `enter`
 - **THEN** the picker shows that the harness is empty and opens nothing

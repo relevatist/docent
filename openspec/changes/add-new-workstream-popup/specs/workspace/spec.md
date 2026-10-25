@@ -31,7 +31,7 @@ zide SHALL read the harness command from `~/.config/zide/config.toml` (`harness`
 ## ADDED Requirements
 
 ### Requirement: Harness aliases
-The config SHALL accept harness aliases as `[harnesses.<name>]` tables with a required `command` and an optional `kind`. `kind` names the harness that the command runs (for example `omp`), and its default SHALL be the base name of the first word of `command`. zide SHALL reject an alias with an empty `command`, and name the alias in the error.
+The config SHALL accept harness aliases as `[harnesses.<name>]` tables with a required `command` and an optional `kind`. `kind` names the harness that the command runs (for example `omp`), and its default SHALL be the base name of the first word of `command`. zide SHALL reject an alias with an empty `command`, and name the alias in the error. zide SHALL expand a leading `~` or `~/` in each word of a harness command, alias or plain, to the home directory.
 
 #### Scenario: Alias with a kind
 - **WHEN** the config has `[harnesses.omp-sandbox]` with `command = "sandbox-exec -f omp.sb omp"` and `kind = "omp"`
@@ -40,6 +40,10 @@ The config SHALL accept harness aliases as `[harnesses.<name>]` tables with a re
 #### Scenario: Alias without a kind
 - **WHEN** the config has `[harnesses.fast]` with `command = "/opt/bin/claude --model haiku"` and no `kind`
 - **THEN** the alias `fast` has the kind `claude`
+
+#### Scenario: Home directory in a harness command
+- **WHEN** the user runs `zide --harness '~/bin/box omp' ~/src/app`
+- **THEN** the harness pane runs `box` from the `bin` directory in the home directory, with the arg `omp`, and has the kind `box`
 
 #### Scenario: Alias with empty command
 - **WHEN** the config has `[harnesses.broken]` with `command = ""`
