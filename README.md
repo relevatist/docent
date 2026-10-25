@@ -140,14 +140,15 @@ The checklist starts with an item checked when its command is on `PATH`. zide ch
 
 For `zellij`, zide puts the key between `// zide: begin` and `// zide: end` lines on the line after the first `keybinds ... {` line, or appends a `keybinds` block if there is none. It changes nothing else in the file, but it adds a newline at the end of the file before it appends a block, if there is no newline there. It keeps a byte order mark and CRLF line endings. It does not install the key, and tells you why, when:
 
-- your config already binds `Alt w` (in any case, for example `"alt w"`), also when it is the snippet that you added by hand (remove it, and zide adds it between the markers),
+- your config already binds `Alt w` (in any case, for example `"alt w"`), also when it is the snippet that you added by hand (remove it, and zide adds it between the markers). zide does not find rare forms, for example `"Alt\tw"`, a quoted `"bind"`, a `\"` before the key, or a `\` line continuation,
 - you changed the lines between the markers (use `--force` to replace them),
-- there is more than one `// zide: begin` or `// zide: end` line, or they are out of order,
+- there is more than one `// zide: begin` or `// zide: end` line, they are out of order, or one of them is missing (fix the file by hand),
 - it cannot find where to put the key (for example the `{` of `keybinds` is on the next line, another node is before `keybinds` on its line, or a comment or string opens on the `keybinds` line),
-- it cannot write to the directory of the config, or
+- it cannot write to the directory of the config,
+- the config has other hard links (zide would split them; add the key by hand, or replace the hard link with a symlink), or
 - `zellij setup --check` fails on the new config.
 
-The first time zide changes the config, it keeps the old file as `config.kdl.zide.bak`. If `config.kdl.zide.bak` exists, zide does not replace it, because it holds the config from before zide. If the config is a symlink, zide changes the file that it points to.
+The first time zide changes the config, it keeps the old file as `config.kdl.zide.bak`. zide writes the backup to a temp file and links it into place, so a failed write leaves no partial backup. If `config.kdl.zide.bak` exists, zide does not replace it, because it holds the config from before zide. If the config is a symlink, zide changes the file that it points to.
 
 The agent skill tells the harness how to use `zide open`, `zide reload`, `zide tour`, and `zide diff`. The reload hook and extension run `zide reload --quiet` each time the harness edits a file, so the editor shows the new content. Outside a workstream, `zide reload --quiet` does nothing and exits zero, so it never fails an edit. codex has no reload adapter; the skill tells it to run `zide reload`.
 
