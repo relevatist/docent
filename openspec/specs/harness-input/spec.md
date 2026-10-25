@@ -7,7 +7,7 @@ Lets the user send file/line references and selected text from the editor into t
 ## Requirements
 
 ### Requirement: Send a file/line reference
-`zide send ref <file>[:<start>[-<end>]]` SHALL paste a reference to that file and line range into the harness input in the caller's tab. The reference format SHALL match the configured harness: `@file:start-end` for `claude` and `omp`, and `file:start-end` for other harnesses. A single-line range SHALL be written as `file:start`. The reference SHALL end with one space.
+`zide send ref <file>[:<start>[-<end>]]` SHALL paste a reference to that file and line range into the harness input in the caller's tab. The reference format SHALL match the harness kind: `@file:start-end` for `claude` and `omp`, and `file:start-end` for other harnesses. The kind SHALL be the kind shown in the harness pane command, or else the base name of the first word of that command. A single-line range SHALL be written as `file:start`. The reference SHALL end with one space.
 
 #### Scenario: Range reference to Claude Code
 - **WHEN** the harness is `claude` and the user runs `zide send ref src/a.go:10-20`
@@ -20,6 +20,10 @@ Lets the user send file/line references and selected text from the editor into t
 #### Scenario: Unknown harness
 - **WHEN** the harness is `aider` and the user runs `zide send ref src/a.go:10-20`
 - **THEN** the harness input receives `src/a.go:10-20 `
+
+#### Scenario: Wrapped harness with a kind
+- **WHEN** the tab was launched with an alias whose command is `sandbox-exec -f omp.sb omp` and whose kind is `omp`, and the user runs `zide send ref src/a.go:10-20`
+- **THEN** the harness input receives `@src/a.go:10-20 `
 
 ### Requirement: Send text
 `zide send text` SHALL paste its standard input into the harness input in the caller's tab, unchanged. As an exception, `zide send` SHALL remove ESC characters from all pasted text, so the text cannot end the bracketed paste early.
