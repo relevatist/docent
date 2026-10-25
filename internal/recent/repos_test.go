@@ -69,3 +69,18 @@ func TestCandidates(t *testing.T) {
 		t.Errorf("Candidates = %q; want %q", got, want)
 	}
 }
+
+func TestReposSymlinkRoot(t *testing.T) {
+	real, dir := t.TempDir(), t.TempDir()
+	tree(t, real, "app/.git/", "lib/")
+	link := filepath.Join(dir, "src")
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(real, "app"), filepath.Join(real, "lib", "app")); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := Repos([]string{link}), []string{filepath.Join(link, "app")}; !slices.Equal(got, want) {
+		t.Errorf("Repos = %q; want %q", got, want)
+	}
+}

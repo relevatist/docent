@@ -99,7 +99,7 @@ tab: field  up/down: move or cycle  enter: open  esc: cancel
 Tab switching inside the popup was considered (`tab` / `shift+tab` cycles the harness). But the harness field is now a text field, so `tab` moves focus between fields and `up` / `down` cycles the harness.
 
 ### Root walk
-`filepath.WalkDir` per root, with a depth check. A directory with a `.git` entry is a hit and returns `fs.SkipDir`. Hidden directories (name starts with `.`) are skipped, so `.cache` and similar trees are not walked. `WalkDir` does not follow symlinks. Errors in subtrees (permissions) are skipped.
+`filepath.WalkDir` per root, with a depth check. A directory with a `.git` entry is a hit and returns `fs.SkipDir`. Hidden directories (name starts with `.`) are skipped, so `.cache` and similar trees are not walked. The root itself goes through `filepath.EvalSymlinks`, and hits are joined back onto the root as given. `WalkDir` does not follow symlinks below the root. Errors in subtrees (permissions) are skipped.
 
 ### Tab name suffix
 For "open another", `new.go` takes the set of `tab_name` values from `list-panes` and picks `<base>-2`, `<base>-3`, and so on. It passes the name to `launch.Run` as `--name`.

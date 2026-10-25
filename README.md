@@ -56,6 +56,8 @@ kind = "omp"               # optional; default: base name of the first word of c
 
 zide expands a leading `~` in `roots` and in each word of an alias `command`. Zellij runs the command without a shell, so other shell syntax does not work.
 
+A root can be a symlink. zide does not follow symlinks below a root.
+
 ## Helix keys
 
 Add the tables from [`assets/helix/keys.toml`](assets/helix/keys.toml) to `~/.config/helix/config.toml`:
