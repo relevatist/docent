@@ -28,7 +28,7 @@ var commands = map[string]command{
 
 func usage(w io.Writer) error {
 	tw := tabwriter.NewWriter(w, 0, 0, 3, ' ', 0)
-	if _, err := fmt.Fprintln(tw, "Usage:\n  zide [--name name] [--harness cmd] [dir]\topen a workstream tab"); err != nil {
+	if _, err := fmt.Fprintln(tw, "Usage:\n  zide [--name name] [--harness cmd|alias] [dir]\topen a workstream tab"); err != nil {
 		return err
 	}
 	for _, name := range slices.Sorted(maps.Keys(commands)) {

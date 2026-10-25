@@ -13,7 +13,7 @@ func TestUsageListsSubcommands(t *testing.T) {
 	if err := usage(&b); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"open", "reload", "send", "tour", "tour-view", "diff", "install", "new", "[dir]"} {
+	for _, name := range []string{"open", "reload", "send", "tour", "tour-view", "diff", "install", "new", "[dir]", "[--harness cmd|alias]"} {
 		if !strings.Contains(b.String(), name) {
 			t.Errorf("usage missing %q:\n%s", name, b.String())
 		}
