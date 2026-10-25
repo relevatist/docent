@@ -22,7 +22,7 @@ var commands = map[string]command{
 	"tour":      {runTour, "tour <file|->\tstart a guided tour of a change"},
 	"tour-view": {runTourView, "tour-view <file>\trun the tour pane (internal)"},
 	"new":       {runNew, "new\tpick a directory and open a workstream tab (inside Zellij)"},
-	"install":   {runInstall, "install [claude|codex|omp]... [--force]\tinstall docent for coding harnesses"},
+	"install":   {runInstall, "install [claude|codex|omp|zellij]... [--force]\tinstall docent for coding harnesses"},
 }
 
 func usage(w io.Writer) error {
