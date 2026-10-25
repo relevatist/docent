@@ -11,9 +11,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/relevatist/zide/internal/config"
-	"github.com/relevatist/zide/internal/panes"
-	"github.com/relevatist/zide/internal/zellij"
+	"github.com/relevatist/docent/internal/config"
+	"github.com/relevatist/docent/internal/panes"
+	"github.com/relevatist/docent/internal/zellij"
 )
 
 const layout = `layout {
@@ -41,7 +41,7 @@ const layout = `layout {
 // Layout returns the workstream KDL layout for a tab called name. The harness
 // command is split on spaces into a command and its args; shell quoting is not
 // supported. When the harness kind differs from the base name of the command,
-// the pane runs through env with ZIDE_HARNESS_KIND set, so the pane command
+// the pane runs through env with DOCENT_HARNESS_KIND set, so the pane command
 // shows the kind.
 func Layout(harness config.Harness, name string) (string, error) {
 	f := strings.Fields(harness.Command)
@@ -71,7 +71,7 @@ type Attach func(dir string, args ...string) error
 
 // Run opens the workstream for the absolute dir: a new tab when inZellij,
 // else a session. Both are called name, or the dir basename if name is empty. If that session is live, the tab is added
-// to it and zide attaches; if it is exited, its record is deleted and a new session starts. It warns on w when zellij is below 0.45.
+// to it and docent attaches; if it is exited, its record is deleted and a new session starts. It warns on w when zellij is below 0.45.
 func Run(r zellij.Runner, attach Attach, w io.Writer, dir, name string, harness config.Harness, inZellij bool) (err error) {
 	if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
 		return fmt.Errorf("%s: not a directory", dir)
@@ -82,7 +82,7 @@ func Run(r zellij.Runner, attach Attach, w io.Writer, dir, name string, harness 
 		return err
 	}
 	if out, _ := r.Run("--version"); OldVersion(string(out)) {
-		if _, err := fmt.Fprintf(w, "zide: warning: zide needs zellij 0.45 or later, found %q\n", strings.TrimSpace(string(out))); err != nil {
+		if _, err := fmt.Fprintf(w, "docent: warning: docent needs zellij 0.45 or later, found %q\n", strings.TrimSpace(string(out))); err != nil {
 			return err
 		}
 	}
@@ -94,17 +94,17 @@ func Run(r zellij.Runner, attach Attach, w io.Writer, dir, name string, harness 
 	out, _ := r.Run("list-sessions", "--no-formatting")
 	found, exited := sessionState(string(out), name)
 	if exited {
-		// An exited session can not take a new tab, and resurrecting it would skip the zide layout.
+		// An exited session can not take a new tab, and resurrecting it would skip the docent layout.
 		if _, err := r.Run("delete-session", name); err != nil {
 			return err
 		}
-		if _, err := fmt.Fprintf(w, "zide: removed exited session record %q\n", name); err != nil {
+		if _, err := fmt.Fprintf(w, "docent: removed exited session record %q\n", name); err != nil {
 			return err
 		}
 	}
 	if !found || exited {
 		// `zellij --session --layout-string` only adds a tab to an existing session.
-		f, err := os.CreateTemp("", "zide-layout-*.kdl")
+		f, err := os.CreateTemp("", "docent-layout-*.kdl")
 		if err != nil {
 			return err
 		}

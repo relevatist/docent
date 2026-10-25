@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/relevatist/zide/internal/tour"
+	"github.com/relevatist/docent/internal/tour"
 )
 
 func TestSkillFrontmatter(t *testing.T) {
@@ -18,13 +18,13 @@ func TestSkillFrontmatter(t *testing.T) {
 	if !strings.HasPrefix(Skill, "---\n") || !ok {
 		t.Fatal("SKILL.md has no frontmatter")
 	}
-	if !regexp.MustCompile(`(?m)^name: zide$`).MatchString(front) {
-		t.Errorf("frontmatter has no `name: zide`:\n%s", front)
+	if !regexp.MustCompile(`(?m)^name: docent$`).MatchString(front) {
+		t.Errorf("frontmatter has no `name: docent`:\n%s", front)
 	}
 	if !regexp.MustCompile(`(?m)^description: \S.*$`).MatchString(front) {
 		t.Errorf("frontmatter has no description:\n%s", front)
 	}
-	for _, s := range []string{"$ZELLIJ", "zide open", "zide reload", "zide tour", "unsaved", "pseudocode", "call tree", "component tree", "file tree", "```diff", "```mermaid", "sequenceDiagram", "erDiagram"} {
+	for _, s := range []string{"$ZELLIJ", "docent open", "docent reload", "docent tour", "unsaved", "pseudocode", "call tree", "component tree", "file tree", "```diff", "```mermaid", "sequenceDiagram", "erDiagram"} {
 		if !strings.Contains(body, s) {
 			t.Errorf("SKILL.md body does not mention %q", s)
 		}
@@ -34,8 +34,8 @@ func TestSkillFrontmatter(t *testing.T) {
 			t.Errorf("SKILL.md body mentions harness-specific %q", h)
 		}
 	}
-	// The tour pane cannot show HTML, and zide diff is gone.
-	for _, s := range []string{"html", "browser", "zide diff"} {
+	// The tour pane cannot show HTML, and docent diff is gone.
+	for _, s := range []string{"html", "browser", "docent diff"} {
 		if strings.Contains(strings.ToLower(body), s) {
 			t.Errorf("SKILL.md body mentions %q", s)
 		}
@@ -83,13 +83,13 @@ func TestClaudeHooks(t *testing.T) {
 	if m.MatchString("Read") || m.MatchString("Bash") {
 		t.Errorf("matcher %q matches read-only tools", groups[0].Matcher)
 	}
-	if h := groups[0].Hooks[0]; h.Type != "command" || h.Command != "zide reload --quiet" {
+	if h := groups[0].Hooks[0]; h.Type != "command" || h.Command != "docent reload --quiet" {
 		t.Errorf("hook = %+v", h)
 	}
 }
 
 func TestClaudePluginFiles(t *testing.T) {
-	for _, name := range []string{".claude-plugin/plugin.json", "hooks/hooks.json", "skills/zide/SKILL.md"} {
+	for _, name := range []string{".claude-plugin/plugin.json", "hooks/hooks.json", "skills/docent/SKILL.md"} {
 		if _, err := fs.Stat(ClaudePlugin, name); err != nil {
 			t.Error(err)
 		}

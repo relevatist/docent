@@ -15,10 +15,10 @@ func write(t *testing.T, s string) {
 	if s == "" {
 		return
 	}
-	if err := os.MkdirAll(filepath.Join(dir, "zide"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, "docent"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "zide", "config.toml"), []byte(s), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "docent", "config.toml"), []byte(s), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -51,8 +51,8 @@ func TestHomeFallback(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", "")
 	t.Setenv("HOME", home)
-	_ = os.MkdirAll(filepath.Join(home, ".config", "zide"), 0o755)
-	_ = os.WriteFile(filepath.Join(home, ".config", "zide", "config.toml"), []byte(`harness = "aider"`), 0o644)
+	_ = os.MkdirAll(filepath.Join(home, ".config", "docent"), 0o755)
+	_ = os.WriteFile(filepath.Join(home, ".config", "docent", "config.toml"), []byte(`harness = "aider"`), 0o644)
 	c, err := Load()
 	if err != nil || c.Harness != "aider" {
 		t.Fatalf("Load = %+v, %v", c, err)

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/relevatist/zide/internal/zellij"
+	"github.com/relevatist/docent/internal/zellij"
 )
 
 func fake(t *testing.T) *zellij.Fake {
@@ -47,7 +47,7 @@ func TestFindOutsideZellij(t *testing.T) {
 	f := &zellij.Fake{}
 	t.Setenv("ZELLIJ_PANE_ID", "")
 	_, err := Find(f, "editor")
-	if err == nil || !strings.Contains(err.Error(), "must run inside a zide workstream") {
+	if err == nil || !strings.Contains(err.Error(), "must run inside a docent workstream") {
 		t.Fatalf("err = %v", err)
 	}
 	if len(f.Calls) != 0 {
@@ -96,10 +96,10 @@ func TestMarker(t *testing.T) {
 		{"", "", ""},
 		{"claude", "", "claude"},
 		{"/opt/bin/omp --model x", "", "/opt/bin/omp --model x"},
-		{"/usr/bin/env ZIDE_HARNESS_KIND=omp sandbox-exec -f omp.sb omp", "omp", "sandbox-exec -f omp.sb omp"},
-		{"env ZIDE_HARNESS_KIND=omp omp", "omp", "omp"},
+		{"/usr/bin/env DOCENT_HARNESS_KIND=omp sandbox-exec -f omp.sb omp", "omp", "sandbox-exec -f omp.sb omp"},
+		{"env DOCENT_HARNESS_KIND=omp omp", "omp", "omp"},
 		{"/usr/bin/env FOO=1 omp", "", "/usr/bin/env FOO=1 omp"},
-		{"/usr/bin/env ZIDE_HARNESS_KIND=omp", "", "/usr/bin/env ZIDE_HARNESS_KIND=omp"},
+		{"/usr/bin/env DOCENT_HARNESS_KIND=omp", "", "/usr/bin/env DOCENT_HARNESS_KIND=omp"},
 	}
 	for _, tt := range tests {
 		kind, ok := Marker(tt.cmd)
@@ -114,7 +114,7 @@ func TestMarker(t *testing.T) {
 
 func TestTabs(t *testing.T) {
 	got, err := Tabs(fake(t))
-	want := []Tab{{0, "one", "/Users/thane/work/relevatist/zide"}, {1, "two", "/Users/thane/work/relevatist/zide"}}
+	want := []Tab{{0, "one", "/Users/thane/work/relevatist/docent"}, {1, "two", "/Users/thane/work/relevatist/docent"}}
 	if err != nil || !slices.Equal(got, want) {
 		t.Errorf("Tabs = %+v, %v; want %+v", got, err, want)
 	}

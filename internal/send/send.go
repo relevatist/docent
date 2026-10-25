@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/relevatist/zide/internal/panes"
-	"github.com/relevatist/zide/internal/zellij"
+	"github.com/relevatist/docent/internal/panes"
+	"github.com/relevatist/docent/internal/zellij"
 )
 
 // FormatRef formats ref (file[:start[-end]]) for the harness command, with one

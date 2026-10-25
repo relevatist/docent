@@ -1,14 +1,14 @@
 {
-  "name": "zide",
-  "description": "zide for Claude Code",
+  "name": "docent",
+  "description": "docent for Claude Code",
   "owner": {
     "name": "Thane Thomson"
   },
   "plugins": [
     {
-      "name": "zide",
+      "name": "docent",
       "source": "./assets/claude-plugin",
-      "description": "Use zide from Claude Code: the zide skill, and an editor reload after each file edit."
+      "description": "Use docent from Claude Code: the docent skill, and an editor reload after each file edit."
     }
   ]
 }

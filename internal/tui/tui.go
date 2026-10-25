@@ -18,7 +18,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/sirupsen/logrus"
 
-	"github.com/relevatist/zide/internal/tour"
+	"github.com/relevatist/docent/internal/tour"
 )
 
 var (

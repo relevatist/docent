@@ -12,7 +12,7 @@ func setup(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	t.Setenv("XDG_STATE_HOME", dir)
-	return filepath.Join(dir, "zide", "recent.toml")
+	return filepath.Join(dir, "docent", "recent.toml")
 }
 
 func TestPath(t *testing.T) {
@@ -23,7 +23,7 @@ func TestPath(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("XDG_STATE_HOME", "")
 	t.Setenv("HOME", home)
-	if got, err := Path(); err != nil || got != filepath.Join(home, ".local", "state", "zide", "recent.toml") {
+	if got, err := Path(); err != nil || got != filepath.Join(home, ".local", "state", "docent", "recent.toml") {
 		t.Errorf("Path = %q, %v", got, err)
 	}
 }

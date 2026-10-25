@@ -7,7 +7,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/relevatist/zide/internal/zellij"
+	"github.com/relevatist/docent/internal/zellij"
 )
 
 // Open shows path in the editor in pane, with the cursor on line when line > 0.

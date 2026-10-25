@@ -6,7 +6,7 @@ import (
 	"testing"
 	"unicode"
 
-	"github.com/relevatist/zide/internal/zellij"
+	"github.com/relevatist/docent/internal/zellij"
 )
 
 func esc(p string) []string   { return []string{"action", "send-keys", "--pane-id", p, "Esc", "Esc"} }

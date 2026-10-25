@@ -1,4 +1,4 @@
-// Package config loads the zide user config.
+// Package config loads the docent user config.
 package config
 
 import (
@@ -28,7 +28,7 @@ type Harness struct {
 	Kind    string `toml:"kind"`
 }
 
-// Path returns $XDG_CONFIG_HOME/zide/config.toml, or ~/.config/zide/config.toml.
+// Path returns $XDG_CONFIG_HOME/docent/config.toml, or ~/.config/docent/config.toml.
 func Path() (string, error) {
 	dir := os.Getenv("XDG_CONFIG_HOME")
 	if dir == "" {
@@ -38,7 +38,7 @@ func Path() (string, error) {
 		}
 		dir = filepath.Join(home, ".config")
 	}
-	return filepath.Join(dir, "zide", "config.toml"), nil
+	return filepath.Join(dir, "docent", "config.toml"), nil
 }
 
 // Load reads the config file. A missing file gives the defaults.

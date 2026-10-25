@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "zide reload --quiet"
+            "command": "docent reload --quiet"
           }
         ]
       }

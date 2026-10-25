@@ -1,10 +1,10 @@
 keybinds {
     shared_except "locked" {
         bind "Alt w" {
-            Run "zide" "new" {
+            Run "docent" "new" {
                 floating true
                 close_on_exit true
-                name "zide new"
+                name "docent new"
             }
         }
     }

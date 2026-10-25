@@ -1,8 +1,8 @@
 {
-  "name": "zide",
-  "description": "Use zide from Claude Code: the zide skill, and an editor reload after each file edit.",
+  "name": "docent",
+  "description": "Use docent from Claude Code: the docent skill, and an editor reload after each file edit.",
   "author": {
     "name": "Thane Thomson"
   },
-  "repository": "https://github.com/relevatist/zide"
+  "repository": "https://github.com/relevatist/docent"
 }

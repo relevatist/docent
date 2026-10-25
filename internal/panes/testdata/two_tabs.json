@@ -62,7 +62,7 @@
     "tab_position": 0,
     "tab_name": "one",
     "pane_command": "/bin/zsh",
-    "pane_cwd": "/Users/thane/work/relevatist/zide"
+    "pane_cwd": "/Users/thane/work/relevatist/docent"
   },
   {
     "id": 1,
@@ -97,7 +97,7 @@
     "tab_position": 0,
     "tab_name": "one",
     "pane_command": "/bin/zsh",
-    "pane_cwd": "/Users/thane/work/relevatist/zide"
+    "pane_cwd": "/Users/thane/work/relevatist/docent"
   },
   {
     "id": 2,
@@ -132,7 +132,7 @@
     "tab_position": 0,
     "tab_name": "one",
     "pane_command": "/bin/zsh",
-    "pane_cwd": "/Users/thane/work/relevatist/zide"
+    "pane_cwd": "/Users/thane/work/relevatist/docent"
   },
   {
     "id": 3,
@@ -167,7 +167,7 @@
     "tab_position": 1,
     "tab_name": "two",
     "pane_command": "/bin/zsh",
-    "pane_cwd": "/Users/thane/work/relevatist/zide"
+    "pane_cwd": "/Users/thane/work/relevatist/docent"
   },
   {
     "id": 4,
@@ -202,7 +202,7 @@
     "tab_position": 1,
     "tab_name": "two",
     "pane_command": "/bin/zsh",
-    "pane_cwd": "/Users/thane/work/relevatist/zide"
+    "pane_cwd": "/Users/thane/work/relevatist/docent"
   },
   {
     "id": 5,
@@ -237,6 +237,6 @@
     "tab_position": 1,
     "tab_name": "two",
     "pane_command": "/bin/zsh",
-    "pane_cwd": "/Users/thane/work/relevatist/zide"
+    "pane_cwd": "/Users/thane/work/relevatist/docent"
   }
 ]

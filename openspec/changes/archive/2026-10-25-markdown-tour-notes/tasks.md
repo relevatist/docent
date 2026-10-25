@@ -8,12 +8,12 @@
 
 ## 2. Commands
 
-- [x] 2.1 Delete `cmd/zide/diff.go` and its tests. Remove `diff` from the command table in `cmd/zide/main.go`, and remove `--diff` from `loadTourView`. Verify `zide --help` does not list `diff` (`main_test.go`).
-- [x] 2.2 In `cmd/zide/tour.go`, remove the `tour.Changes` check from `startTour`, and update `tourUsage` (no `base`, optional `file`, the new keys). Verify `tour_test.go` passes outside a git repository.
+- [x] 2.1 Delete `cmd/docent/diff.go` and its tests. Remove `diff` from the command table in `cmd/docent/main.go`, and remove `--diff` from `loadTourView`. Verify `docent --help` does not list `diff` (`main_test.go`).
+- [x] 2.2 In `cmd/docent/tour.go`, remove the `tour.Changes` check from `startTour`, and update `tourUsage` (no `base`, optional `file`, the new keys). Verify `tour_test.go` passes outside a git repository.
 
 ## 3. Markdown view
 
-- [x] 3.1 Add `charm.land/glamour/v2` v2.0.1 and `github.com/AlexanderGrooff/mermaid-ascii` (latest pseudo-version) to `go.mod`. Verify `go mod tidy` leaves no gin or cobra in the `go list -deps ./cmd/zide` output.
+- [x] 3.1 Add `charm.land/glamour/v2` v2.0.1 and `github.com/AlexanderGrooff/mermaid-ascii` (latest pseudo-version) to `go.mod`. Verify `go mod tidy` leaves no gin or cobra in the `go list -deps ./cmd/docent` output.
 - [x] 3.2 In `internal/tui`, add `renderNote(note, width)`: `safe`, then mermaid fences to text blocks (with recover, and the source plus the reason on failure), then glamour with word wrap. Discard logrus output. Verify with tests: a `graph LR; A --> B` fence draws boxes, a bad fence keeps its source and shows the reason, an escape sequence becomes U+FFFD, and the output has no escape codes from mermaid-ascii.
 - [x] 3.3 Change the step view to show the header and then the cached rendered note. Render again only on a step or width change. Use the tour title as the heading for a note-only step. Choose the dark or light glamour style from `tea.BackgroundColorMsg`. Verify with `tui_test.go` that a file step shows no file lines and that a note-only step shows the title.
 
@@ -23,8 +23,8 @@
 
 ## 5. Skill and docs
 
-- [x] 5.1 Rewrite the tour section of `assets/claude-plugin/skills/zide/SKILL.md`: the note is Markdown, `file` is optional (overview steps), and there is no `base`. Add the show-me views with short examples (pseudocode, call tree, component tree, file tree, `diff` sketches, code block, and Mermaid flowchart, sequence, and ER) and guidance to keep diagrams narrow. Do not mention HTML. Remove the `zide diff` section. Verify `assets_test.go` passes and `grep -i html` on the skill finds nothing.
-- [x] 5.2 Update `README.md`: remove `zide diff` and `base`, describe Markdown notes, Mermaid, and the new keys. Verify with `grep -n "zide diff\|base" README.md`.
+- [x] 5.1 Rewrite the tour section of `assets/claude-plugin/skills/docent/SKILL.md`: the note is Markdown, `file` is optional (overview steps), and there is no `base`. Add the show-me views with short examples (pseudocode, call tree, component tree, file tree, `diff` sketches, code block, and Mermaid flowchart, sequence, and ER) and guidance to keep diagrams narrow. Do not mention HTML. Remove the `docent diff` section. Verify `assets_test.go` passes and `grep -i html` on the skill finds nothing.
+- [x] 5.2 Update `README.md`: remove `docent diff` and `base`, describe Markdown notes, Mermaid, and the new keys. Verify with `grep -n "docent diff\|base" README.md`.
 
 ## 6. Integration
 

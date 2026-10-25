@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/relevatist/zide/internal/zellij"
+	"github.com/relevatist/docent/internal/zellij"
 )
 
 type pane struct {
@@ -42,7 +42,7 @@ func Find(r zellij.Runner, name string) (string, error) {
 func Lookup(r zellij.Runner, name string) (Pane, error) {
 	self := os.Getenv("ZELLIJ_PANE_ID")
 	if self == "" {
-		return Pane{}, errors.New("must run inside a zide workstream")
+		return Pane{}, errors.New("must run inside a docent workstream")
 	}
 	selfID, err := strconv.Atoi(self)
 	if err != nil {
@@ -59,7 +59,7 @@ func Lookup(r zellij.Runner, name string) (Pane, error) {
 		}
 	}
 	if tab < 0 {
-		return Pane{}, fmt.Errorf("pane %d not found; must run inside a zide workstream", selfID)
+		return Pane{}, fmt.Errorf("pane %d not found; must run inside a docent workstream", selfID)
 	}
 	for _, p := range terms {
 		if p.TabID == tab && p.Title == name {
@@ -108,17 +108,17 @@ func terminals(r zellij.Runner) ([]pane, error) {
 	return slices.DeleteFunc(all, func(p pane) bool { return p.IsPlugin }), nil
 }
 
-// KindVar is the variable that a zide layout sets on a harness pane whose
+// KindVar is the variable that a docent layout sets on a harness pane whose
 // kind differs from the base name of its command.
-const KindVar = "ZIDE_HARNESS_KIND"
+const KindVar = "DOCENT_HARNESS_KIND"
 
-// Marker returns the kind in an `env ZIDE_HARNESS_KIND=kind cmd...` pane command.
+// Marker returns the kind in an `env DOCENT_HARNESS_KIND=kind cmd...` pane command.
 func Marker(cmd string) (string, bool) {
 	kind, _, ok := unwrap(cmd)
 	return kind, ok
 }
 
-// Unwrap returns cmd without a leading `env ZIDE_HARNESS_KIND=kind`.
+// Unwrap returns cmd without a leading `env DOCENT_HARNESS_KIND=kind`.
 func Unwrap(cmd string) string {
 	if _, rest, ok := unwrap(cmd); ok {
 		return rest

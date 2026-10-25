@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/relevatist/zide/internal/config"
-	"github.com/relevatist/zide/internal/zellij"
+	"github.com/relevatist/docent/internal/config"
+	"github.com/relevatist/docent/internal/zellij"
 )
 
 var cat = config.Harness{Command: "cat", Kind: "cat"}
@@ -56,7 +56,7 @@ func TestLayoutKind(t *testing.T) {
 	for _, want := range []string{
 		`pane name="editor" command="hx" size="60%" focus=true`,
 		`pane name="harness" command="/usr/bin/env"`,
-		`args "ZIDE_HARNESS_KIND=omp" "sandbox-exec" "-f" "omp.sb" "omp"`,
+		`args "DOCENT_HARNESS_KIND=omp" "sandbox-exec" "-f" "omp.sb" "omp"`,
 	} {
 		if !strings.Contains(kdl, want) {
 			t.Errorf("layout missing %q:\n%s", want, kdl)
@@ -213,15 +213,15 @@ func TestRunName(t *testing.T) {
 }
 
 func TestSessionState(t *testing.T) {
-	out := "zide-x [Created 1m ago] \n" +
-		"zide [Created 3m 9s ago] (EXITED - attach to resurrect)\n" +
+	out := "docent-x [Created 1m ago] \n" +
+		"docent [Created 3m 9s ago] (EXITED - attach to resurrect)\n" +
 		"live [Created 3s ago] (current)\n"
 	for name, want := range map[string][2]bool{
-		"live":   {true, false},
-		"zide":   {true, true},
-		"zide-x": {true, false},
-		"zid":    {false, false},
-		"absent": {false, false},
+		"live":     {true, false},
+		"docent":   {true, true},
+		"docent-x": {true, false},
+		"zid":      {false, false},
+		"absent":   {false, false},
 	} {
 		found, exited := sessionState(out, name)
 		if [2]bool{found, exited} != want {
@@ -240,7 +240,7 @@ func TestRunOutsideZellijSessions(t *testing.T) {
 	}{
 		{"", nil, []string{"--session", "app", "--new-session-with-layout", kdl}, ""},
 		{"app [Created 3s ago] \n", [][]string{{"--session", "app", "action", "new-tab", "--layout-string", kdl, "--name", "app", "--cwd", "DIR"}}, []string{"attach", "app"}, ""},
-		{"app [Created 3m ago] (EXITED - attach to resurrect)\n", [][]string{{"delete-session", "app"}}, []string{"--session", "app", "--new-session-with-layout", kdl}, "zide: removed exited session record \"app\"\n"},
+		{"app [Created 3m ago] (EXITED - attach to resurrect)\n", [][]string{{"delete-session", "app"}}, []string{"--session", "app", "--new-session-with-layout", kdl}, "docent: removed exited session record \"app\"\n"},
 	} {
 		f := &zellij.Fake{Out: map[string]string{"--version": "zellij 0.45.1", "list-sessions --no-formatting": tc.sessions}}
 		var got []string

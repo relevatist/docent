@@ -1,15 +1,15 @@
-BIN := bin/zide
+BIN := bin/docent
 
 .PHONY: all
 all: check build
 
 .PHONY: build
 build:
-	go build -o $(BIN) ./cmd/zide
+	go build -o $(BIN) ./cmd/docent
 
 .PHONY: install
 install:
-	go install ./cmd/zide
+	go install ./cmd/docent
 
 # Includes the integration test, which runs when zellij and hx are on PATH.
 .PHONY: test

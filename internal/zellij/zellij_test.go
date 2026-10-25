@@ -13,7 +13,7 @@ func TestHelpersArgv(t *testing.T) {
 	_ = WriteChars(f, "terminal_2", ":goto 4")
 	_ = SendKeys(f, "terminal_2", "Esc", "Esc")
 	_ = FocusPane(f, "terminal_3")
-	_, _ = NewPane(f, "--stacked", "--name", "tour", "--", "zide", "tour-view", "x")
+	_, _ = NewPane(f, "--stacked", "--name", "tour", "--", "docent", "tour-view", "x")
 
 	want := [][]string{
 		{"action", "list-panes", "--all", "--json"},
@@ -21,7 +21,7 @@ func TestHelpersArgv(t *testing.T) {
 		{"action", "write-chars", "--pane-id", "terminal_2", "--", ":goto 4"},
 		{"action", "send-keys", "--pane-id", "terminal_2", "Esc", "Esc"},
 		{"action", "focus-pane-id", "terminal_3"},
-		{"action", "new-pane", "--stacked", "--name", "tour", "--", "zide", "tour-view", "x"},
+		{"action", "new-pane", "--stacked", "--name", "tour", "--", "docent", "tour-view", "x"},
 	}
 	if !slices.EqualFunc(f.Calls, want, slices.Equal) {
 		t.Fatalf("calls:\n got %q\nwant %q", f.Calls, want)

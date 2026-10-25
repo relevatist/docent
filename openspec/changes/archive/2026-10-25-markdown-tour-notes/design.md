@@ -4,7 +4,7 @@
 
 - `internal/tour` parses tours (`tour.go`), maps steps to git hunks (`diff.go`, `Build`), and holds the step model (`model.go`).
 - `internal/tui` renders a step as header lines plus `Item.Body` (diff lines). `j/k` scroll only the body.
-- `cmd/zide/tour.go` checks git (`tour.Changes`) before it opens the pane. `cmd/zide/diff.go` and `tour-view --diff` build tours from hunks.
+- `cmd/docent/tour.go` checks git (`tour.Changes`) before it opens the pane. `cmd/docent/diff.go` and `tour-view --diff` build tours from hunks.
 - The stack is `charm.land` v2 (bubbletea v2, lipgloss v2).
 
 ## Goals / Non-Goals
@@ -86,7 +86,7 @@ The header (position, heading, status, invalid reason) stays fixed. Only the not
 ### Removals
 
 - `internal/tour/diff.go`, its tests, `testdata/*.diff`.
-- `cmd/zide/diff.go`, the `diff` entry in `main.go`, `tour-view --diff`, and the `tour.Changes` check in `startTour`.
+- `cmd/docent/diff.go`, the `diff` entry in `main.go`, `tour-view --diff`, and the `tour.Changes` check in `startTour`.
 
 ### Dependencies
 
@@ -101,7 +101,7 @@ The header (position, heading, status, invalid reason) stays fixed. Only the not
 - [mermaid-ascii panics on bad input] -> Recover around `RenderDiagram` and treat a panic as an error. This shows the source (spec: unsupported diagram).
 - [A wide diagram is wider than the pane] -> The existing `MaxWidth` clip cuts it. The skill tells the harness to keep diagrams small.
 - [A larger binary from glamour, chroma, and goldmark] -> Accepted.
-- [Removing `base` and the coverage step means that zide no longer finds a hunk that the harness skipped] -> Accepted by the user. The skill tells the harness to cover all of the change.
+- [Removing `base` and the coverage step means that docent no longer finds a hunk that the harness skipped] -> Accepted by the user. The skill tells the harness to cover all of the change.
 
 ## Migration Plan
 

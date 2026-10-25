@@ -12,7 +12,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/relevatist/zide/internal/tour"
+	"github.com/relevatist/docent/internal/tour"
 )
 
 func TestSafe(t *testing.T) {

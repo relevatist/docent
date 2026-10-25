@@ -1,4 +1,4 @@
-module github.com/relevatist/zide
+module github.com/relevatist/docent
 
 go 1.27.3
 

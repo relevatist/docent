@@ -19,7 +19,7 @@ type state struct {
 	Dirs []string `toml:"dirs"`
 }
 
-// Path returns $XDG_STATE_HOME/zide/recent.toml, or ~/.local/state/zide/recent.toml.
+// Path returns $XDG_STATE_HOME/docent/recent.toml, or ~/.local/state/docent/recent.toml.
 func Path() (string, error) {
 	dir := os.Getenv("XDG_STATE_HOME")
 	if dir == "" {
@@ -29,7 +29,7 @@ func Path() (string, error) {
 		}
 		dir = filepath.Join(home, ".local", "state")
 	}
-	return filepath.Join(dir, "zide", "recent.toml"), nil
+	return filepath.Join(dir, "docent", "recent.toml"), nil
 }
 
 // Load returns the recent directories, most recent first. A missing file

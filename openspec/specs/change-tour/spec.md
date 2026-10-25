@@ -7,45 +7,45 @@ Walks the user through a code change one step at a time, in an order that helps 
 ## Requirements
 
 ### Requirement: Tour file format
-A tour SHALL be a JSON object with optional `title` and a non-empty `steps` array. Each step SHALL have an optional `file`, optional `lines` as `[start, end]`, and optional `note` in Markdown. A step SHALL have a `file`, a `note`, or both. `lines` SHALL require `file`. A step with a `file` and without `lines` SHALL cover the whole file. zide SHALL ignore unknown fields.
+A tour SHALL be a JSON object with optional `title` and a non-empty `steps` array. Each step SHALL have an optional `file`, optional `lines` as `[start, end]`, and optional `note` in Markdown. A step SHALL have a `file`, a `note`, or both. `lines` SHALL require `file`. A step with a `file` and without `lines` SHALL cover the whole file. docent SHALL ignore unknown fields.
 
 #### Scenario: Valid tour
-- **WHEN** zide reads `{"title":"Retry","steps":[{"file":"a.go","lines":[1,40],"note":"New type"}]}`
+- **WHEN** docent reads `{"title":"Retry","steps":[{"file":"a.go","lines":[1,40],"note":"New type"}]}`
 - **THEN** the tour has one step for `a.go` lines 1 to 40 with note `New type`
 
 #### Scenario: Note-only step
-- **WHEN** zide reads `{"steps":[{"note":"## Overview"}]}`
+- **WHEN** docent reads `{"steps":[{"note":"## Overview"}]}`
 - **THEN** the tour has one step with no file and note `## Overview`
 
 #### Scenario: Empty step
 - **WHEN** a step has neither `file` nor `note`
-- **THEN** zide prints an error that names the step and exits non-zero without opening a pane
+- **THEN** docent prints an error that names the step and exits non-zero without opening a pane
 
 #### Scenario: Lines without file
 - **WHEN** a step has `lines` and no `file`
-- **THEN** zide prints an error that names the step and exits non-zero without opening a pane
+- **THEN** docent prints an error that names the step and exits non-zero without opening a pane
 
 #### Scenario: Old tour with base
-- **WHEN** zide reads a tour that has a `base` field
-- **THEN** zide ignores `base` and runs the tour
+- **WHEN** docent reads a tour that has a `base` field
+- **THEN** docent ignores `base` and runs the tour
 
 #### Scenario: Invalid JSON
 - **WHEN** the tour file is not valid JSON or has no steps
-- **THEN** zide prints an error with the reason and exits non-zero without opening a pane
+- **THEN** docent prints an error with the reason and exits non-zero without opening a pane
 
 ### Requirement: Start a tour
-`zide tour <file>` SHALL open a pane named `tour` in the caller's tab, stacked with the shell pane, and show the first step. `zide tour -` SHALL read the tour from standard input. The harness and shell panes SHALL stay visible.
+`docent tour <file>` SHALL open a pane named `tour` in the caller's tab, stacked with the shell pane, and show the first step. `docent tour -` SHALL read the tour from standard input. The harness and shell panes SHALL stay visible.
 
 #### Scenario: Harness starts a tour
-- **WHEN** the harness runs `zide tour /tmp/tour.json`
+- **WHEN** the harness runs `docent tour /tmp/tour.json`
 - **THEN** a `tour` pane opens stacked with the shell, showing step 1, and the harness pane stays visible
 
 #### Scenario: Tour from stdin
-- **WHEN** the harness pipes a tour to `zide tour -`
+- **WHEN** the harness pipes a tour to `docent tour -`
 - **THEN** the tour pane opens with that tour
 
 ### Requirement: Editor follows the tour
-On entering a step that has a file, zide SHALL open the step's file in the editor at the step's first line, without moving focus away from the tour pane. On entering a step without a file, the editor SHALL stay where it is.
+On entering a step that has a file, docent SHALL open the step's file in the editor at the step's first line, without moving focus away from the tour pane. On entering a step without a file, the editor SHALL stay where it is.
 
 #### Scenario: Next step
 - **WHEN** the user moves to a step for `b.go` lines 88 to 102
@@ -120,12 +120,12 @@ When the step view is taller than the pane, the user SHALL be able to scroll it.
 - **THEN** the next step shows from its top
 
 ### Requirement: Mermaid diagrams in notes
-A fenced `mermaid` block in a note SHALL show as a text diagram. Flowchart, sequence, and ER diagrams SHALL be supported. When zide cannot draw a block, it SHALL show the block's source and the reason.
+A fenced `mermaid` block in a note SHALL show as a text diagram. Flowchart, sequence, and ER diagrams SHALL be supported. When docent cannot draw a block, it SHALL show the block's source and the reason.
 
 #### Scenario: Flowchart
 - **WHEN** a note has a `mermaid` block with `graph LR` and `A --> B`
 - **THEN** the pane shows boxes `A` and `B` joined by an arrow
 
 #### Scenario: Unsupported diagram
-- **WHEN** a note has a `mermaid` block that zide cannot draw
+- **WHEN** a note has a `mermaid` block that docent cannot draw
 - **THEN** the pane shows the block's source and the reason it was not drawn

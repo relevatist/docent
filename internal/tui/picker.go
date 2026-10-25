@@ -15,7 +15,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/relevatist/zide/internal/recent"
+	"github.com/relevatist/docent/internal/recent"
 )
 
 // PickerInput is what the workstream picker starts with.

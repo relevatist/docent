@@ -5,7 +5,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/relevatist/zide/internal/zellij"
+	"github.com/relevatist/docent/internal/zellij"
 )
 
 func TestFormatRef(t *testing.T) {

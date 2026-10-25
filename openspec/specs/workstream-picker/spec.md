@@ -7,26 +7,26 @@ Lets the user open another workstream from inside Zellij with a keybinding and a
 ## Requirements
 
 ### Requirement: Open the picker
-`zide new` SHALL show a picker in its terminal, with fzf. When the user confirms a directory and a harness, zide SHALL open a workstream tab for them in the current Zellij session and exit zero. When the user cancels, zide SHALL open nothing and exit zero.
+`docent new` SHALL show a picker in its terminal, with fzf. When the user confirms a directory and a harness, docent SHALL open a workstream tab for them in the current Zellij session and exit zero. When the user cancels, docent SHALL open nothing and exit zero.
 
 #### Scenario: Confirm a choice
-- **WHEN** the user runs `zide new` in a tab whose harness is `claude`, selects `~/src/app`, and presses `enter`
-- **THEN** a new tab named `app` opens for `~/src/app` with harness `claude`, and `zide new` exits zero
+- **WHEN** the user runs `docent new` in a tab whose harness is `claude`, selects `~/src/app`, and presses `enter`
+- **THEN** a new tab named `app` opens for `~/src/app` with harness `claude`, and `docent new` exits zero
 
 #### Scenario: Cancel
-- **WHEN** the user runs `zide new` and presses `esc`
-- **THEN** no tab opens and `zide new` exits zero
+- **WHEN** the user runs `docent new` and presses `esc`
+- **THEN** no tab opens and `docent new` exits zero
 
 #### Scenario: fzf missing
 - **WHEN** `fzf` is not on PATH
-- **THEN** zide prints that fzf is not on PATH and exits non-zero
+- **THEN** docent prints that fzf is not on PATH and exits non-zero
 
 #### Scenario: Not inside Zellij
-- **WHEN** the user runs `zide new` outside Zellij
-- **THEN** zide prints that `zide new` must run inside Zellij and exits non-zero without showing the picker
+- **WHEN** the user runs `docent new` outside Zellij
+- **THEN** docent prints that `docent new` must run inside Zellij and exits non-zero without showing the picker
 
 ### Requirement: Directory candidates
-The picker SHALL list the recent workstream directories first, most recent at the top, then the git repos and worktrees found under the config key `roots`, then the home directory and each directory below it. Below the home directory, zide SHALL NOT look inside a hidden directory, a `node_modules` directory, `~/Library`, or a symlink. Each directory SHALL appear once, as `~/...` when it is under the home directory. A directory that no longer exists SHALL NOT appear.
+The picker SHALL list the recent workstream directories first, most recent at the top, then the git repos and worktrees found under the config key `roots`, then the home directory and each directory below it. Below the home directory, docent SHALL NOT look inside a hidden directory, a `node_modules` directory, `~/Library`, or a symlink. Each directory SHALL appear once, as `~/...` when it is under the home directory. A directory that no longer exists SHALL NOT appear.
 
 #### Scenario: Recent first
 - **WHEN** the recent list is `~/wt/retry/app` then `~/src/app`, and `roots = ["~/src"]` holds `~/src/app` and `~/src/lib`
@@ -45,7 +45,7 @@ The picker SHALL list the recent workstream directories first, most recent at th
 - **THEN** the picker does not list them
 
 ### Requirement: Find repos under roots
-For each directory in `roots` (a leading `~` means the home directory), zide SHALL list each directory that has a `.git` entry (directory or file), at any depth below the root. zide SHALL NOT look inside a directory it listed, a hidden directory, or a symlink below the root. A root that does not exist SHALL be ignored. The picker SHALL show the repos while the walk runs, and SHALL stop the walk when it exits.
+For each directory in `roots` (a leading `~` means the home directory), docent SHALL list each directory that has a `.git` entry (directory or file), at any depth below the root. docent SHALL NOT look inside a directory it listed, a hidden directory, or a symlink below the root. A root that does not exist SHALL be ignored. The picker SHALL show the repos while the walk runs, and SHALL stop the walk when it exits.
 
 #### Scenario: Worktree two levels down
 - **WHEN** `roots = ["~/wt"]` and `~/wt/retry/app/.git` is a file
@@ -76,13 +76,13 @@ Typed text SHALL filter the directory list with the fzf fuzzy match (scheme `pat
 
 #### Scenario: No match and not a directory
 - **WHEN** the user types `nope`, nothing matches, and the user presses `enter`
-- **THEN** zide prints that there is no directory for `nope` and opens nothing
+- **THEN** docent prints that there is no directory for `nope` and opens nothing
 
 ### Requirement: Choose the harness
-`enter` in the directory list SHALL open the tab with the default harness: the harness of the current tab, or the config `harness` when zide cannot find one. `alt-enter` SHALL first show a harness list: the default harness, then the config aliases in name order, then `claude`, `omp`, `codex`, with each value once. In the harness list, `enter` SHALL choose the typed text (a command with args, or an alias name) when it has a space or nothing matches, else the selected harness.
+`enter` in the directory list SHALL open the tab with the default harness: the harness of the current tab, or the config `harness` when docent cannot find one. `alt-enter` SHALL first show a harness list: the default harness, then the config aliases in name order, then `claude`, `omp`, `codex`, with each value once. In the harness list, `enter` SHALL choose the typed text (a command with args, or an alias name) when it has a space or nothing matches, else the selected harness.
 
 #### Scenario: Default from current tab
-- **WHEN** `zide new` runs in a workstream tab whose harness is `omp`, and the user presses `enter` on a directory
+- **WHEN** `docent new` runs in a workstream tab whose harness is `omp`, and the user presses `enter` on a directory
 - **THEN** the new tab runs `omp`
 
 #### Scenario: Pick an alias
@@ -103,7 +103,7 @@ Typed text SHALL filter the directory list with the fzf fuzzy match (scheme `pat
 
 #### Scenario: Empty harness
 - **WHEN** nothing matches in the harness list, the typed text is empty or spaces, and the user presses `enter`
-- **THEN** zide prints that the harness is empty and opens nothing
+- **THEN** docent prints that the harness is empty and opens nothing
 
 ### Requirement: Directory already open
 When the chosen directory is open in a workstream tab of the current session, the picker SHALL show a list with `switch to tab <name>` and `open another tab`. `esc` SHALL cancel and open nothing. Switch SHALL focus that tab and open nothing. Another SHALL open a new tab named after the directory with the first free suffix `-2`, `-3`, and so on. A tab SHALL count as open for a directory when its `editor` pane has that directory as its working directory (`pane_cwd` in `zellij action list-panes`).
@@ -125,8 +125,8 @@ When the chosen directory is open in a workstream tab of the current session, th
 - **THEN** the picker does not detect the tab and opens a new tab named after the directory (accepted limit)
 
 ### Requirement: Zellij keybinding
-zide SHALL ship a Zellij keybinding snippet that binds `Alt w`, in all modes except locked, to run `zide new` in a floating pane that closes when `zide new` exits. zide SHALL change the user's Zellij config only through `zide install zellij` (see `harness-integration`).
+docent SHALL ship a Zellij keybinding snippet that binds `Alt w`, in all modes except locked, to run `docent new` in a floating pane that closes when `docent new` exits. docent SHALL change the user's Zellij config only through `docent install zellij` (see `harness-integration`).
 
 #### Scenario: Open the picker from the editor
-- **WHEN** the user has added the snippet to the Zellij config (by hand or with `zide install zellij`) and presses `Alt w` in the editor pane
+- **WHEN** the user has added the snippet to the Zellij config (by hand or with `docent install zellij`) and presses `Alt w` in the editor pane
 - **THEN** a floating pane shows the picker, and it closes after the user confirms or cancels

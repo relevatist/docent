@@ -1,4 +1,4 @@
-# zide keys for Helix. Add these tables to ~/.config/helix/config.toml.
+# docent keys for Helix. Add these tables to ~/.config/helix/config.toml.
 # space z r: paste a reference to the selected lines into the harness input.
 # space z s: paste the selected text into the harness input.
 #
@@ -8,9 +8,9 @@
 # safe with this binding.
 
 [keys.normal.space.z]
-r = ":sh zide send ref '%{buffer_name}:%{selection_line_start}-%{selection_line_end}'"
-s = ":pipe-to zide send text"
+r = ":sh docent send ref '%{buffer_name}:%{selection_line_start}-%{selection_line_end}'"
+s = ":pipe-to docent send text"
 
 [keys.select.space.z]
-r = ":sh zide send ref '%{buffer_name}:%{selection_line_start}-%{selection_line_end}'"
-s = ":pipe-to zide send text"
+r = ":sh docent send ref '%{buffer_name}:%{selection_line_start}-%{selection_line_end}'"
+s = ":pipe-to docent send text"
