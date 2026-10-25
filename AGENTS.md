@@ -6,6 +6,13 @@ docent joins Helix, a coding harness, and a shell in one Zellij tab. See README.
 
 - Use modern (Go v1.27+), idiomatic Go.
 
+## Documentation
+
+- `README.md` is the overview and quick start. `docs/` is the full user documentation.
+- When a change alters user-visible behavior (commands, flags, config, keys, output, install), update the `docs/` page, and the README if needed, in the same commit.
+- When the commands that the agent uses change, also update `assets/claude-plugin/skills/docent/SKILL.md`.
+- Write like the existing docs: short sentences, simple technical English, tables and examples over prose.
+
 ## Git
 
 - Make commits on the CURRENT branch, whatever branch that is (including `main`).** Do not create, switch, or check out branches unless the user explicitly asks.
