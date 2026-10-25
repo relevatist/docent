@@ -28,6 +28,7 @@ zide                       # workstream for the current directory
 zide ~/src/app             # workstream for ~/src/app
 zide --harness omp ~/src/app
 zide --name app-retry ~/wt/retry/app
+zide new                   # inside Zellij: pick a directory and a harness
 ```
 
 - Inside Zellij, zide opens a new tab. Outside Zellij, it starts a Zellij session.
@@ -35,6 +36,9 @@ zide --name app-retry ~/wt/retry/app
 - The tab (or session) name is `--name`, or the directory basename.
 - zide opens only directories that exist. It never creates directories or git worktrees.
 - For more workstreams, open one tab per project or worktree. Each zide command acts only on the panes in its own tab.
+- `zide new` shows a picker. Type to filter the directories: the recent directories come first, then the git repos and worktrees under `roots` (down to 3 levels). `tab` moves to the harness field, and `up`/`down` there cycles the harnesses and aliases. `enter` opens the tab. `esc` cancels.
+- If the directory is already open in a tab, `zide new` asks if you want to go to that tab or open another tab (`app-2`, `app-3`, ...). zide finds that tab from the working directory of its editor pane. After `:cd` in Helix, zide does not find it.
+- zide keeps the recent directories in `~/.local/state/zide/recent.toml` (or `$XDG_STATE_HOME/zide/recent.toml`).
 
 Config file `~/.config/zide/config.toml` (all keys optional):
 
@@ -60,6 +64,14 @@ Add the tables from [`assets/helix/keys.toml`](assets/helix/keys.toml) to `~/.co
 | `space z s` | paste the selected text into the harness input |
 
 Limit: Helix gives `space z r` the buffer name through the shell, and has no way to quote it for the shell. The binding puts the name in single quotes, so a name that contains `'` is not safe with this binding.
+
+## Zellij key
+
+Add the `keybinds` block from [`assets/zellij/keys.kdl`](assets/zellij/keys.kdl) to `~/.config/zellij/config.kdl`. If your config already has a `keybinds` block, put the `shared_except "locked"` block in it. zide does not change your Zellij config.
+
+| Key | Action |
+|-----|--------|
+| `Alt w` | open `zide new` in a floating pane (all modes except locked); the pane closes when `zide new` exits |
 
 ## Commands
 

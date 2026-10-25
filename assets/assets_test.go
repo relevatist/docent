@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"io/fs"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -92,5 +94,24 @@ func TestClaudePluginFiles(t *testing.T) {
 		if _, err := fs.Stat(ClaudePlugin, name); err != nil {
 			t.Error(err)
 		}
+	}
+}
+
+func TestZellijKeys(t *testing.T) {
+	if _, err := exec.LookPath("zellij"); err != nil || testing.Short() {
+		t.Skip("needs zellij")
+	}
+	dir := t.TempDir()
+	data, err := os.ReadFile("zellij/keys.kdl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := filepath.Join(dir, "config.kdl")
+	if err := os.WriteFile(cfg, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, err := exec.Command("zellij", "--config", cfg, "--config-dir", dir, "setup", "--check").CombinedOutput()
+	if err != nil || !strings.Contains(string(out), "[CONFIG FILE]: Well defined.") {
+		t.Errorf("zellij setup --check: %v\n%s", err, out)
 	}
 }

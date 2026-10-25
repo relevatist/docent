@@ -1,0 +1,11 @@
+keybinds {
+    shared_except "locked" {
+        bind "Alt w" {
+            Run "zide" "new" {
+                floating true
+                close_on_exit true
+                name "zide new"
+            }
+        }
+    }
+}
