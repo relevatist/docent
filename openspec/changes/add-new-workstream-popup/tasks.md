@@ -22,8 +22,8 @@
 
 ## 4. Directory candidates
 
-- [ ] 4.1 Write failing tests for the root walk against a temp tree: `.git` directory and `.git` file are hits; no descent into a hit; depth 3 limit; hidden directories skipped; missing root ignored
-- [ ] 4.2 Implement the walk and the candidate list (recent first, deleted directories removed, duplicates removed); verify the 4.1 tests pass and a test asserts the order from the `Recent first` scenario
+- [x] 4.1 Write failing tests for the root walk against a temp tree: `.git` directory and `.git` file are hits; no descent into a hit; depth 3 limit; hidden directories skipped; missing root ignored
+- [x] 4.2 Implement the walk and the candidate list (recent first, deleted directories removed, duplicates removed); verify the 4.1 tests pass and a test asserts the order from the `Recent first` scenario
 - [ ] 4.3 Write failing tests for the fuzzy filter: subsequence match, case ignored, list order kept, a typed path to an existing directory is the only choice when nothing matches; implement it and verify the tests pass
 
 ## 5. Picker TUI

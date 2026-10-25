@@ -1,4 +1,5 @@
-// Package recent keeps the list of recently launched workstream directories.
+// Package recent keeps the recently launched workstream directories and finds
+// the git repos under the config roots.
 package recent
 
 import (
