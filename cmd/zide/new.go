@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	"flag"
 	"fmt"
@@ -22,7 +23,21 @@ import (
 type pickerFunc func(tui.PickerInput) (tui.Picked, bool, error)
 
 func runNew(args []string) int {
-	return newCmd(zellij.Exec{}, args, os.Stderr, tui.PickWorkstream)
+	code := newCmd(zellij.Exec{}, args, os.Stderr, tui.PickWorkstream)
+	if isTerminal(os.Stdin) {
+		return pause(code, os.Stdin, os.Stderr)
+	}
+	return code
+}
+
+// pause waits for enter after a non-zero exit, so that the error stays on
+// screen in a floating pane that closes on exit.
+func pause(code int, r io.Reader, w io.Writer) int {
+	if code != 0 {
+		_, _ = fmt.Fprint(w, "press enter to close")
+		_, _ = bufio.NewReader(r).ReadString('\n')
+	}
+	return code
 }
 
 func newCmd(r zellij.Runner, args []string, w io.Writer, pick pickerFunc) int {
@@ -55,10 +70,9 @@ func newWorkstream(r zellij.Runner, w io.Writer, pick pickerFunc) error {
 		return err
 	}
 	dirs, err := recent.Load()
+	warning := ""
 	if err != nil {
-		if _, err := fmt.Fprintln(w, "zide: warning:", err); err != nil {
-			return err
-		}
+		warning = "recent directories: " + err.Error()
 	}
 	tabs, err := panes.Tabs(r)
 	if err != nil {
@@ -69,6 +83,7 @@ func newWorkstream(r zellij.Runner, w io.Writer, pick pickerFunc) error {
 		Recent:  dirs,
 		Roots:   c.Roots,
 		Harness: harness,
+		Warning: warning,
 		Aliases: slices.Collect(maps.Keys(c.Harnesses)),
 		IsOpen: func(dir string) (string, bool) {
 			t, ok := openTab(tabs, dir)

@@ -177,3 +177,39 @@ func TestNewKeepsKind(t *testing.T) {
 		}
 	}
 }
+
+func TestNewRecentWarning(t *testing.T) {
+	f := newFake(t, "", "/other", "claude")
+	state := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", state)
+	writeTestFile(t, filepath.Join(state, "zide", "recent.toml"), "dirs = [")
+	var in tui.PickerInput
+	pick := func(got tui.PickerInput) (tui.Picked, bool, error) { in = got; return tui.Picked{}, false, nil }
+	var w bytes.Buffer
+	if code := newCmd(f, nil, &w, pick); code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	if !strings.Contains(in.Warning, "recent directories: toml:") || w.Len() != 0 {
+		t.Errorf("warning %q, output %q; want the warning in the picker only", in.Warning, w.String())
+	}
+}
+
+type readCount struct{ n int }
+
+func (r *readCount) Read(b []byte) (int, error) {
+	r.n++
+	return copy(b, "\n"), nil
+}
+
+func TestPauseOnError(t *testing.T) {
+	for _, code := range []int{0, 1, 2} {
+		var r readCount
+		var w bytes.Buffer
+		if got := pause(code, &r, &w); got != code {
+			t.Errorf("pause(%d) = %d", code, got)
+		}
+		if waited := r.n > 0 && strings.Contains(w.String(), "press enter to close"); waited != (code != 0) {
+			t.Errorf("exit %d: reads %d, output %q", code, r.n, w.String())
+		}
+	}
+}
