@@ -239,3 +239,10 @@ func TestPickerPaste(t *testing.T) {
 		t.Errorf("result = %+v, %v; want %s", got, ok, dirs[1])
 	}
 }
+
+func TestPickerWarning(t *testing.T) {
+	p, _ := newPicker(t, PickerInput{Harness: "claude", Warning: "bad recent.toml"})
+	if v := p.View().Content; !strings.Contains(v, "warning: bad recent.toml") {
+		t.Errorf("no warning:\n%s", v)
+	}
+}

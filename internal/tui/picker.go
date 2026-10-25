@@ -24,6 +24,7 @@ type PickerInput struct {
 	Roots   []string // searched for git repos after the picker shows
 	Harness string   // first value of the harness field
 	Aliases []string // config harness alias names, in any order
+	Warning string   // shown under the fields
 	// IsOpen returns the name of a tab that has dir open.
 	IsOpen func(dir string) (tab string, ok bool)
 }
@@ -245,6 +246,9 @@ func (p *picker) View() tea.View {
 		lines = append(lines, faint.Render("  No directories. Set roots in the zide config to list git repos."))
 	}
 	lines = append(lines, field("harness: ", p.harness, p.onHarness))
+	if p.in.Warning != "" {
+		lines = append(lines, removed.Render("warning: "+safe(p.in.Warning)))
+	}
 	if p.err != "" {
 		lines = append(lines, removed.Render(p.err))
 	}
