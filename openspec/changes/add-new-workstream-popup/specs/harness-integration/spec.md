@@ -77,8 +77,16 @@ For `zellij`, zide SHALL add the `Alt w` bind from `assets/zellij/keys.kdl` to t
 - **THEN** zide appends one `keybinds` block that holds the marked node, because Zellij uses only the first `keybinds` block
 
 #### Scenario: Keybinds in a form zide cannot change
-- **WHEN** the first `keybinds` node does not end its line with `{` (for example the `{` is on the next line), or the file has KDL that zide does not parse (raw strings, `/-` comments)
-- **THEN** zide writes nothing, tells the user to add the snippet by hand, and exits non-zero
+- **WHEN** the first `keybinds` node does not start its line (for example `theme "x"; keybinds {`) or is quoted, does not end its line with `{` (for example the `{` is on the next line), or its line ends inside a comment or string, or the file has KDL that zide does not parse (raw strings, `/-` comments)
+- **THEN** zide writes nothing, tells the user to add the snippet by hand, and exits non-zero; it does not append a second `keybinds` block
+
+#### Scenario: Byte order mark and CRLF
+- **WHEN** the config starts with a UTF-8 byte order mark, or the `keybinds` line ends with CRLF
+- **THEN** zide keeps the byte order mark, writes the marked node with the line ending of the `keybinds` line, and ignores `\r` when it compares the marked node on a rerun
+
+#### Scenario: Markers zide cannot use
+- **WHEN** the config has more than one begin or end marker, or the end marker is before the begin marker
+- **THEN** zide names the file, tells the user to fix it by hand, writes nothing, and exits non-zero; markers in a `/* */` comment do not count, and when only such markers exist zide tells the user to add the snippet by hand
 
 #### Scenario: Rerun with the same content
 - **WHEN** the marked node matches the shipped one
@@ -89,16 +97,24 @@ For `zellij`, zide SHALL add the `Alt w` bind from `assets/zellij/keys.kdl` to t
 - **THEN** zide names the file, writes nothing, and exits non-zero; with `--force` it replaces only the marked node
 
 #### Scenario: Alt w bound outside the marked node
-- **WHEN** the config binds `Alt w` outside the marked node
-- **THEN** zide names the file and the bind, writes nothing, and exits non-zero
+- **WHEN** the config binds `Alt w` outside the marked node, with the modifier in any case and with any spaces (for example `"alt w"` or `"ALT  w"`), as any key of a `bind`
+- **THEN** zide names the file and the bind, writes nothing, and exits non-zero; when the bind is the snippet from `assets/zellij/keys.kdl`, zide says that it was added by hand and tells the user to remove it so that zide can manage it
 
 ### Requirement: Safe Zellij config write
-Before it writes, zide SHALL run `zellij --config <new file> setup --check` on the new content and refuse if it fails. When it changes an existing file, zide SHALL keep the old file as `config.kdl.zide.bak` next to it, write through a temp file and rename, and keep the file mode. When the config is a symlink, zide SHALL change the file that the symlink points to.
+Before it writes, zide SHALL run `zellij --config <new file> setup --check` on the new content and refuse if it fails, and SHALL refuse if it cannot make a file in the config directory. When it changes an existing file, zide SHALL keep the old file as `config.kdl.zide.bak` next to it unless that file exists, write through a temp file and rename, and keep the file mode. A new config file SHALL get mode `0644`. When the config is a symlink, zide SHALL change the file that the symlink points to.
 
 #### Scenario: Config check fails
 - **WHEN** `zellij setup --check` fails on the new content
 - **THEN** zide prints its output, writes nothing, and exits non-zero
 
 #### Scenario: Backup and mode
-- **WHEN** zide changes an existing config with mode `0600`
-- **THEN** `config.kdl.zide.bak` holds the old content and the new config keeps mode `0600`
+- **WHEN** zide changes an existing config with mode `0640`
+- **THEN** `config.kdl.zide.bak` holds the old content and the new config keeps mode `0640`
+
+#### Scenario: Backup kept
+- **WHEN** zide changes the config and `config.kdl.zide.bak` exists
+- **THEN** zide does not change `config.kdl.zide.bak`, because it holds the config from before zide, and says that it kept it
+
+#### Scenario: Config directory not writable
+- **WHEN** the user runs `zide install codex zellij` and zide cannot make a file in the directory of the Zellij config (for example a symlink into a read-only directory)
+- **THEN** zide names the problem, writes nothing for codex either, and exits non-zero
