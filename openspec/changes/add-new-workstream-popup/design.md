@@ -22,7 +22,7 @@ See proposal.md - Why. Facts checked on the target machine (Zellij 0.45.1):
 
 **Non-Goals:**
 - Creating directories or worktrees from the picker (the `workspace` spec forbids it).
-- Ranked fuzzy matching. A subsequence filter in list order is enough for a few hundred entries.
+- Path completion. fzf lists every directory under `~`, so a fuzzy query finds it. A typed path outside the list opens when nothing matches.
 - Editing the Zellij config outside the marked node that `zide install zellij` manages.
 
 ## Decisions
@@ -83,23 +83,26 @@ dirs = ["/Users/thane/wt/retry/app", "/Users/thane/src/app"]
 
 `recent.Add(dir)` loads, moves `dir` to the front, cuts the list to 20 entries, and writes through a temp file and rename. `launchDir` calls it once per launch: outside Zellij just before it attaches (attach blocks until the user detaches), and inside Zellij after the new tab opens. So `zide [dir]` and `zide new` both record. A write error prints a warning and does not fail the launch. Two launches at the same time can lose one entry. This is acceptable for a history list.
 
-### Picker as a bubbletea model in `internal/tui`
+### Picker in fzf
+
+The first version was a bubbletea model with a subsequence filter. It had no ranking and no way to reach a directory outside `roots` except an exact typed path. fzf gives ranked fuzzy matching and is fast for tens of thousands of lines (a walk of `~` on the target machine gives 56k directories in 2.3s), so `zide new` runs fzf (`internal/tui/picker.go`) in up to three steps:
 
 ```
-> rtap_
-  ~/wt/retry/app        recent
-  ~/src/app             recent
-  ~/src/lib
-harness: omp-sandbox
-tab: field  up/down: move or cycle  enter: open  esc: cancel
+dir> rtap                          fzf --layout=reverse --scheme=path --print-query --expect=alt-enter
+  enter: open with omp  alt-enter: choose harness  esc: cancel
+> ~/wt/retry/app
+harness> sand                      only after alt-enter; fzf --print-query
+> omp-sandbox
+> switch to tab app                only when the dir is open; fzf --no-input
+  open another tab
 ```
 
-- No new dependency. The text fields are a string and a cursor at the end: runes append and `backspace` deletes. `bubbles/textinput` is not needed for one-line input with no cursor movement.
-- The model gets the recent list at start, and the root walk runs in a goroutine that sends hits on a channel. A `tea.Cmd` reads the next batch (up to 100 hits, or the hits in 50ms after the first). So the recent list shows at once, and the repos append while the walk runs. When the picker exits, it cancels the walk and does not wait for the goroutine, so a slow `ReadDir` (for example on a network mount) does not delay the exit. The goroutine returns when the walk sees the cancel.
-- The picker returns a result (`dir`, harness string, open/switch/another). `cmd/zide/new.go` does all the Zellij calls, so the model tests do not need a fake runner.
-- Open-tab prompt: after `enter`, `new.go` checks the `pane_cwd` of each `editor` pane. If one matches, the picker shows a second screen with `switch` / `open another`. To keep this in one program, the model gets an `isOpen(dir) (tab string, ok bool)` func at start.
-
-Tab switching inside the popup was considered (`tab` / `shift+tab` cycles the harness). But the harness field is now a text field, so `tab` moves focus between fields and `up` / `down` cycles the harness.
+- Input: zide writes the lines to fzf stdin from a goroutine: recent dirs, repos under `roots`, then `recent.Dirs(home)`, each once, as `~/...`. fzf does not use `--walker` when stdin is a pipe, so zide walks. Paths with control characters or tabs are dropped, as fzf output could not give them back. When fzf exits, `cmd.Wait` closes the pipe, the next write fails, and the goroutine stops; the walk context is cancelled after the first step.
+- Output (checked with fzf 0.74.5 under a pty): with `--print-query --expect=alt-enter`, fzf prints the query, the key (empty for `enter`), and the selection, and exits 0. With no match it prints the query and an empty key, and exits 1. `esc` exits 130. Other codes are errors. `accept-or-print-query` is not used: with no match it prints only the query, with no key line.
+- Typed path: a query that is a typed path to an existing directory wins over the selection, because with 56k lines a path such as `/tmp` nearly always fuzzy-matches another line. Else zide uses the selection, or with no match prints `no directory for "<query>"`. An empty query with no selection cancels. Each line is made absolute first, so a relative root such as `roots = ["src"]` gives paths that open.
+- Harness step: the selection, or the query with no match. A query with a space (after trimming) is used as is, because fzf extended search matches each word on its own (`omp -s` selects `omp-sandbox`).
+- `zide new` needs `fzf` on PATH, and prints an error without it. The picker returns the same `Picked` as before, so `cmd/zide/new.go` did not change.
+- Tests inject the fzf runner and assert the args, input lines, and result. `runFzf` is tested with the real fzf in `--filter` mode, and is skipped when fzf is missing.
 
 ### Root walk
 `filepath.WalkDir` per root, with no depth limit (like the fzf walker). It returns an `iter.Seq` and stops when its context is done. A directory with a `.git` entry is a hit and returns `fs.SkipDir`. Hidden directories (name starts with `.`) are skipped, so `.cache` and similar trees are not walked. The root itself goes through `filepath.EvalSymlinks`, and hits are joined back onto the root as given. `WalkDir` does not follow symlinks below the root. Errors in subtrees (permissions) are skipped.
@@ -144,7 +147,7 @@ keybinds clear-defaults=true {
 - Markers: one begin and one end line, which start outside a comment or string. More than one, out of order, or one without the other: refuse with "fix <path> by hand". Markers only in a comment: refuse. Same content (ignoring `\r`): no write. Other content: refuse without `--force`; with it, replace the lines between the markers. A `bind` with a key `"Alt w"` (modifier in any case, any spaces) outside the markers: refuse; when it is the asset's bind, the message says that it was added by hand. The scanner is not a tokenizer, so it does not find rare forms (`"Alt\tw"`, a quoted `"bind"`, a `\"` argument before the key, a `\` line continuation); `zellij setup --check` does not catch them either. Accepted: the README states the limit.
 - Check: all of this runs in `install.check`, with `zellij --config <temp file> setup --check` and a temp file made and removed in the config directory, or in its nearest parent that exists, so a refusal writes nothing for any item. A config with other hard links is refused, because the rename would split them. `apply` writes the old content to a synced temp file and hard-links it to `config.kdl.zide.bak`, so the backup is complete or absent; if the link exists, it keeps it (the first backup holds the config from before zide). Then it writes a temp file in the same directory with the old mode (`0644` for a new file), syncs it, and renames it.
 
-`close_on_exit` would hide errors and warnings, so on a terminal inside Zellij, after a non-zero exit or any printed output, `zide new` waits for `enter`. A read error of the recent list shows as a warning line in the picker.
+`close_on_exit` would hide errors and warnings, so on a terminal inside Zellij, after a non-zero exit or any printed output, `zide new` waits for `enter`. A read error of the recent list shows as a warning line in the fzf header.
 
 ## Risks / Trade-offs
 
@@ -152,6 +155,7 @@ keybinds clear-defaults=true {
 - [The `env` wrapper changes the pane command that users and other tools see] -> Only `send` reads it, and `Unwrap` handles it.
 - [`env` is not on `PATH` in an unusual environment] -> `/usr/bin/env` exists on macOS and Linux. Use the absolute path `/usr/bin/env`.
 - [`:cd` in Helix changes the editor `pane_cwd`, so that tab is no longer detected for its first directory] -> Accepted. The spec states it.
+- [The home walk lists many directories] -> It streams into fzf, so the first lines show at once. Hidden directories, `node_modules`, and `~/Library` are skipped.
 - [Large roots make the walk slow] -> No descent into a repo, hidden directories skipped, symlinks below the root not followed (no loops), and the walk is asynchronous and streams hits, so the picker does not block.
 
 ## Migration Plan

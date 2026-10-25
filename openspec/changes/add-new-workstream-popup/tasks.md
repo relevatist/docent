@@ -41,7 +41,7 @@
 ## 7. Integration
 
 - [x] 7.1 Extend `integration_test.go`: launch a workstream for a temp directory, and verify `list-panes` shows that directory as the editor pane `pane_cwd` and that `zide open` still finds the editor pane
-- [ ] 7.2 Manual check in a real session: press `Alt w` in the editor pane, filter to a worktree, choose an alias with a `kind`, confirm; verify the new tab opens, `space z r` sends an `@` ref, `Alt w` on the same directory offers switch and open another, and both work
+- [x] 7.2 Manual check in a real session: press `Alt w` in the editor pane, filter to a worktree, choose an alias with a `kind`, confirm; verify the new tab opens, `space z r` sends an `@` ref, `Alt w` on the same directory offers switch and open another, and both work
 
 ## 8. Unlimited walk and typed path
 
@@ -54,6 +54,14 @@
 - [x] 9.2 Write failing tests for the config edit: no file creates `keybinds { <node> }`; insert after the first top-level `keybinds ... {` line with the rest unchanged byte for byte; `keybinds` in `//` and `/* */` comments ignored; no `keybinds` node appends one block; `{` on the next line, raw strings, and `/-` refuse; same marked node gives no change; a changed marked node refuses without `--force` and is replaced with it; `Alt w` bound outside the markers refuses and names the bind
 - [x] 9.3 Write failing CLI tests against a temp `HOME` and `ZELLIJ_CONFIG_DIR`: `zide install zellij` writes the config, the backup, and keeps the mode and a symlink; the config path follows `ZELLIJ_CONFIG_FILE`, `ZELLIJ_CONFIG_DIR`, and the first existing dir; `/etc/zellij` only refuses; a failing `setup --check` writes nothing; `zide install codex zellij` with a refused config writes nothing for codex; the checklist has the `zellij` item checked when `zellij` is on `PATH`
 - [x] 9.4 Implement the `zellij` item in `cmd/zide/install.go` with the node from `assets.ZellijKeys`; update the usage text and the README (`zide install` section and Zellij key section); verify the 9.2 and 9.3 tests pass and `make check` passes
+
+## 10. Picker in fzf
+
+- [x] 10.1 Write failing tests for `recent.Dirs`: the root and each directory below it in walk order; hidden directories, `node_modules`, and `Library` just below the root skipped; stops when its context is done. Implement it with a walk shared with `Repos`; verify the tests pass
+- [x] 10.2 Write failing tests for the fzf picker with a fake runner: input order (recent, repos, home dirs, each once, as `~/...`); `enter` uses the default harness; exit 1 with a typed path opens it, with other text gives an error that names it; exit 130 cancels in each step; exit 2 is an error; `alt-enter` shows the harness candidates in order and takes the selection or the typed command; empty harness is an error; the open-tab step returns switch or another; the warning is in the header. Test `runFzf` with the real fzf (`--filter`), and that the input stops when fzf exits
+- [x] 10.3 Replace the bubbletea picker with the fzf steps; update README; verify the 10.2 tests pass and `make check` passes
+- [x] 10.4 Review fixes, each with a failing test first: a typed path to an existing directory wins over the selection; a harness query with a space is used as the command; lines from a relative root are made absolute; a `$HOME` with a trailing slash is cleaned; an empty query with no selection cancels; table tests for `typedDir` and for dropped tab and newline names. README: recent directories first only with an empty query, typed path wins, and the macOS privacy prompts
+- [x] 10.5 Manual check in a real session: `Alt w`, type a fuzzy query for a directory under `~`, `enter`; `alt-enter` with a typed command; a directory that is open offers switch and another
 
 ## Workflow follow-up
 
