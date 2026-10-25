@@ -214,3 +214,13 @@ func TestPickerScroll(t *testing.T) {
 		t.Errorf("selection %s not in view:\n%s", dirs[2], v)
 	}
 }
+
+func TestPickerHarnessKeepsSelection(t *testing.T) {
+	p, dirs := newPicker(t, PickerInput{Harness: "claude"})
+	press(p, "down", "down", "tab")
+	typeText(p, " --xy")
+	press(p, "backspace", "enter")
+	if got, ok := p.result(); !ok || got != (Picked{Dir: dirs[2], Harness: "claude --x"}) {
+		t.Errorf("result = %+v, %v; want %s", got, ok, dirs[2])
+	}
+}

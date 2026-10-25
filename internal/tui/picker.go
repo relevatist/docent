@@ -109,10 +109,6 @@ func (p *picker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (p *picker) key(k tea.KeyPressMsg) tea.Cmd {
-	field := &p.query
-	if p.onHarness {
-		field = &p.harness
-	}
 	p.err = ""
 	switch k.String() {
 	case "esc":
@@ -124,18 +120,27 @@ func (p *picker) key(k tea.KeyPressMsg) tea.Cmd {
 	case "down", "ctrl+n":
 		p.move(1)
 	case "backspace":
-		_, n := utf8.DecodeLastRuneInString(*field)
-		*field = (*field)[:len(*field)-n]
-		p.cur = 0
+		p.edit(func(s string) string {
+			_, n := utf8.DecodeLastRuneInString(s)
+			return s[:len(s)-n]
+		})
 	case "enter":
 		return p.confirm()
 	default:
 		if k.Text != "" {
-			*field += k.Text
-			p.cur = 0
+			p.edit(func(s string) string { return s + k.Text })
 		}
 	}
 	return nil
+}
+
+// edit sets the focused field to f(field). A query edit resets the selection.
+func (p *picker) edit(f func(string) string) {
+	if p.onHarness {
+		p.harness = f(p.harness)
+		return
+	}
+	p.query, p.cur = f(p.query), 0
 }
 
 func (p *picker) move(step int) {
