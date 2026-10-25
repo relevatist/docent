@@ -54,6 +54,8 @@ kind = "omp"               # optional; default: base name of the first word of c
 
 `kind` is the harness that the command runs. `zide send ref` uses it to format references, so a wrapped harness still gets `@` references. `kind` must be one word.
 
+zide expands a leading `~` in `roots` and in each word of an alias `command`. Zellij runs the command without a shell, so other shell syntax does not work.
+
 ## Helix keys
 
 Add the tables from [`assets/helix/keys.toml`](assets/helix/keys.toml) to `~/.config/helix/config.toml`:

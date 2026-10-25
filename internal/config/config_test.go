@@ -161,3 +161,17 @@ func TestReadmeExample(t *testing.T) {
 		t.Errorf("Load = %+v; Resolve = %+v, %v", c, h, err)
 	}
 }
+
+func TestAliasHome(t *testing.T) {
+	write(t, "[harnesses.box]\ncommand = \"~/bin/box -f ~/omp.sb ~x a~/b ~ omp\"\n")
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	c, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := home + "/bin/box -f " + home + "/omp.sb ~x a~/b " + home + " omp"
+	if got := c.Harnesses["box"]; got.Command != want || got.Kind != "box" {
+		t.Errorf("box = %+v; want command %q", got, want)
+	}
+}

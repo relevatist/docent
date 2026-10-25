@@ -59,18 +59,33 @@ func Load() (Config, error) {
 			return c, fmt.Errorf("harness alias %q: kind %q must be one word", name, h.Kind)
 		}
 		h.Kind = cmp.Or(h.Kind, kindOf(h.Command))
-		c.Harnesses[name] = h
-	}
-	for i, r := range c.Roots {
-		if r == "~" || strings.HasPrefix(r, "~/") {
-			home, err := os.UserHomeDir()
-			if err != nil {
+		words := strings.Fields(h.Command)
+		for i := range words {
+			if words[i], err = expandHome(words[i]); err != nil {
 				return c, err
 			}
-			c.Roots[i] = filepath.Join(home, r[1:])
+		}
+		h.Command = strings.Join(words, " ")
+		c.Harnesses[name] = h
+	}
+	for i := range c.Roots {
+		if c.Roots[i], err = expandHome(c.Roots[i]); err != nil {
+			return c, err
 		}
 	}
 	return c, nil
+}
+
+// expandHome replaces a leading ~ or ~/ in p with the home directory.
+func expandHome(p string) (string, error) {
+	if p != "~" && !strings.HasPrefix(p, "~/") {
+		return p, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return p, err
+	}
+	return filepath.Join(home, p[1:]), nil
 }
 
 // Resolve returns the alias named s, or s as a plain command whose kind is
