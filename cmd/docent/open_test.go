@@ -41,8 +41,7 @@ func TestOpenLine(t *testing.T) {
 	if code := openCmd(f, []string{"a.go:42"}, &out); code != 0 {
 		t.Fatalf("exit %d: %s", code, out.String())
 	}
-	if !hasCall(f, "action", "write-chars", "--pane-id", "terminal_3", "--", ":open '"+abs+"'") ||
-		!hasCall(f, "action", "write-chars", "--pane-id", "terminal_3", "--", ":goto 42") {
+	if !hasCall(f, zellij.WriteArgs("terminal_3", []byte("\x1b[27u\x1b[27u:open '"+abs+"'\r:goto 42\r"))...) {
 		t.Fatalf("calls %q", f.Calls)
 	}
 	if slices.ContainsFunc(f.Calls, func(c []string) bool { return c[1] == "focus-pane-id" }) {
@@ -90,7 +89,7 @@ func TestOpenControlChars(t *testing.T) {
 		if msg := out.String(); !strings.Contains(msg, "control characters") || strings.ContainsAny(msg, "\r\x1b") {
 			t.Errorf("%q: output %q", arg, msg)
 		}
-		if slices.ContainsFunc(f.Calls, func(c []string) bool { return c[1] == "write-chars" }) {
+		if slices.ContainsFunc(f.Calls, func(c []string) bool { return c[1] == "write" }) {
 			t.Errorf("%q: calls %q", arg, f.Calls)
 		}
 	}
@@ -116,7 +115,7 @@ func TestReload(t *testing.T) {
 	if code := reloadCmd(f, nil, &out); code != 0 {
 		t.Fatalf("exit %d: %s", code, out.String())
 	}
-	if !hasCall(f, "action", "write-chars", "--pane-id", "terminal_3", "--", ":reload-all") {
+	if !hasCall(f, zellij.WriteArgs("terminal_3", []byte("\x1b[27u\x1b[27u:reload-all\r"))...) {
 		t.Fatalf("calls %q", f.Calls)
 	}
 }

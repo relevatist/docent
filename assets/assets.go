@@ -23,3 +23,8 @@ var ZellijKeys string
 
 //go:embed zellij/layout.kdl
 var ZellijLayout string
+
+// ZellijPlugin is the docent Zellij plugin. Build it with `make plugin`.
+//
+//go:embed zellij/docent.wasm
+var ZellijPlugin []byte

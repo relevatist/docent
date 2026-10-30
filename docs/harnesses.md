@@ -7,7 +7,7 @@ A harness is the coding agent in the `harness` pane, for example Claude Code (`c
 ```sh
 docent install                 # choose from a checklist
 docent install claude omp      # or name them
-docent install zellij          # add the Alt w key to the Zellij config
+docent install zellij          # add the Alt w key and the docent plugin to Zellij
 docent install codex --force   # overwrite a skill or extension file that you changed
 ```
 
@@ -18,10 +18,10 @@ Run `docent install` again after you upgrade docent.
 | `claude` | The `docent@docent` Claude Code plugin: the agent skill and a reload hook. Restart Claude Code after the install. |
 | `codex` | The agent skill: `~/.agents/skills/docent/SKILL.md` |
 | `omp` | The agent skill (same path as codex) and a reload extension: `~/.omp/agent/extensions/docent-reload.ts` |
-| `zellij` | The `Alt w` key. See [Keys](keys.md#zellij-key). |
+| `zellij` | The `Alt w` key and the docent Zellij plugin. Start a new Zellij session after the install. See [Install](install.md#what-docent-install-zellij-writes). |
 
 - The checklist starts with an item checked when its command is on `PATH`.
-- docent checks everything before it changes anything. If a command is missing, a file has changes and you did not give `--force`, or docent cannot add the Zellij key, it installs nothing and exits non-zero.
+- docent checks everything before it changes anything. If a command is missing, a file has changes and you did not give `--force`, or docent cannot change a Zellij file, it installs nothing and exits non-zero.
 - For `claude`, docent writes the plugin to `~/.local/share/docent/claude-plugin/` (or `$XDG_DATA_HOME/docent/claude-plugin/`) and installs it with the `claude plugin` CLI.
 
 ## What the skill and hooks do

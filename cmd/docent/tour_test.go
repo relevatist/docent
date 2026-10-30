@@ -149,8 +149,7 @@ func TestStepOpensEditorWithoutFocus(t *testing.T) {
 	items := tour.Build(tour.Tour{Steps: []tour.Step{{File: "a.go", Lines: []int{2, 3}}}}, dir)
 	m := newModel(f, items)
 	m.Start()
-	if !hasCall(f, "action", "write-chars", "--pane-id", "terminal_3", "--", ":open '"+filepath.Join(dir, "a.go")+"'") ||
-		!hasCall(f, "action", "write-chars", "--pane-id", "terminal_3", "--", ":goto 2") {
+	if !hasCall(f, zellij.WriteArgs("terminal_3", []byte("\x1b[27u\x1b[27u:open '"+filepath.Join(dir, "a.go")+"'\r:goto 2\r"))...) {
 		t.Fatalf("calls %q", f.Calls)
 	}
 	if slices.ContainsFunc(f.Calls, func(c []string) bool { return c[1] == "focus-pane-id" }) {

@@ -19,10 +19,12 @@ If you want a change, open an issue.
 - Go 1.27+
 - [golangci-lint](https://golangci-lint.run/) for `make lint`
 - Zellij 0.45+ and Helix 25.07+ for the integration test
+- [rustup](https://rustup.rs/) and cargo to build docent (for its Zellij plugin)
 
 ## Build and test
 
 ```sh
+make plugin      # assets/zellij/docent.wasm (the other targets run it first)
 make build       # bin/docent
 make check       # fmt-check, vet, lint, test
 make test-unit   # skips the integration test
@@ -30,6 +32,14 @@ make vuln        # govulncheck
 ```
 
 The integration test runs only when `zellij` and `hx` are on `PATH`.
+
+Plain `go build` and `go test` need `assets/zellij/docent.wasm`. Run `make plugin` once, and again after you change `plugin/`.
+
+## Zellij plugin
+
+`plugin/` is the docent Zellij plugin, in Rust. `make plugin` builds it and copies it to `assets/zellij/docent.wasm`, which docent embeds. The file is not in Git.
+
+`plugin/rust-toolchain.toml` pins the Rust version and the `wasm32-wasip1` target. rustup installs them on the first build.
 
 ## Specs
 

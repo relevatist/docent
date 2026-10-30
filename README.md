@@ -4,15 +4,15 @@ docent joins an editor (Helix), a coding harness (Claude Code, oh-my-pi, codex, 
 
 ![docent: Helix on the left, the harness and a tour pane on the right (old layout)](demo.png)
 
-Requirements: macOS or Linux, Zellij 0.45+, Helix 25.07+, Go 1.27+ (to build), fzf (for `docent new`).
+Requirements: macOS or Linux, Zellij 0.45+, Helix 25.07+, Go 1.27+ and Rust through rustup (to build), fzf (for `docent new`).
 
 Full documentation: [docs/](docs/README.md).
 
 ## Quick start
 
 ```sh
-go install github.com/relevatist/docent/cmd/docent@latest
-docent install     # agent skill and reload hook for your harnesses, and the Zellij key
+git clone https://github.com/relevatist/docent && make -C docent install
+docent install     # agent skill and reload hook for your harnesses, and the Zellij key and plugin
 cd ~/src/app
 docent             # open a workstream for ~/src/app
 ```

@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/relevatist/docent/assets"
 	"github.com/relevatist/docent/internal/config"
 	"github.com/relevatist/docent/internal/panes"
 	"github.com/relevatist/docent/internal/tui"
@@ -69,14 +70,39 @@ func TestIntegrationOpen(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// A temp HOME keeps the user's Zellij config and cache out. The Zellij
+	// config and the cache get what `docent install zellij` writes.
+	home := filepath.Join(tmp, "home")
+	plugin := filepath.Join(tmp, "docent.wasm")
+	zcfg := filepath.Join(tmp, "zellij")
+	zellijConfig, err := editMarked("show_startup_tips false\nshow_release_notes false\n", pluginNode(plugin), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	perms, ok := editPermissions("", plugin)
+	if !ok {
+		t.Fatal("editPermissions failed")
+	}
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(home, ".cache"))
+	for name, data := range map[string]string{
+		plugin:                            string(assets.ZellijPlugin),
+		filepath.Join(zcfg, "config.kdl"): zellijConfig,
+		filepath.Join(zellijCacheDir(home), "permissions.kdl"): perms,
+	} {
+		if err := replaceFile(name, data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
 	// Outside Zellij, so docent creates a session instead of a tab in ours.
 	var env []string
 	for _, kv := range os.Environ() {
-		if !strings.HasPrefix(kv, "ZELLIJ") && !strings.HasPrefix(kv, "SHELL=") {
+		if !strings.HasPrefix(kv, "ZELLIJ") && !strings.HasPrefix(kv, "SHELL=") && !strings.HasPrefix(kv, "HOME=") {
 			env = append(env, kv)
 		}
 	}
-	env = append(env, "SHELL=/bin/sh", "XDG_STATE_HOME="+filepath.Join(tmp, "state"), "XDG_CONFIG_HOME="+cfg)
+	env = append(env, "SHELL=/bin/sh", "HOME="+home, "XDG_CACHE_HOME="+filepath.Join(home, ".cache"),
+		"ZELLIJ_CONFIG_DIR="+zcfg, "XDG_STATE_HOME="+filepath.Join(tmp, "state"), "XDG_CONFIG_HOME="+cfg)
 	session := fmt.Sprintf("docent-it-%d", os.Getpid())
 	zj := func(args ...string) (string, error) {
 		cmd := exec.Command("zellij", append([]string{"--session", session}, args...)...)
@@ -144,9 +170,8 @@ func TestIntegrationOpen(t *testing.T) {
 			time.Sleep(200 * time.Millisecond)
 		}
 		logErr(zj("kill-session", session))
-		logErr(zj("delete-session", session, "--force"))
 		logErr("", client.Process.Kill())
-		logErr("", client.Wait())
+		_ = client.Wait()
 	})
 
 	screen := func(pane string) string {
@@ -274,5 +299,95 @@ func TestIntegrationOpen(t *testing.T) {
 	})
 	if marker := " " + panes.LayoutVar + "=" + strings.ReplaceAll(layout, " ", "%20") + " "; !strings.Contains(harness.Command, marker) {
 		t.Errorf("docent new harness command = %q; want %q", harness.Command, marker)
+	}
+
+	// A write from another tab keeps the focused pane of tab 1 scrolled.
+	// `zellij action write` would scroll it to the bottom.
+	if out, err := zj("action", "focus-pane-id", ids["shell"]); err != nil {
+		t.Fatalf("focus-pane-id: %v\n%s", err, out)
+	}
+	if out, err := zj("action", "write-chars", "--pane-id", ids["shell"], "seq 300\n"); err != nil {
+		t.Fatalf("write-chars: %v\n%s", err, out)
+	}
+	poll("seq output", func() bool { return strings.Contains(screen(ids["shell"]), "\n300\n") })
+	if out, err := zj("action", "page-scroll-up", "--pane-id", ids["shell"]); err != nil {
+		t.Fatalf("page-scroll-up: %v\n%s", err, out)
+	}
+	scrolled := screen(ids["shell"])
+	if strings.Contains(scrolled, "\n300\n") {
+		t.Fatalf("shell did not scroll:\n%s", scrolled)
+	}
+
+	// runIn runs docent in pane, as from a shell in that pane.
+	runIn := func(pane, stdin string, args ...string) {
+		t.Helper()
+		cmd := exec.Command(docent, args...)
+		cmd.Dir, cmd.Stdin = dir, strings.NewReader(stdin)
+		cmd.Env = append(env, "ZELLIJ=0", "ZELLIJ_SESSION_NAME="+session, "ZELLIJ_PANE_ID="+strings.TrimPrefix(pane, "terminal_"))
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("docent %q: %v\n%s", args, err, out)
+		}
+	}
+	runIn(fmt.Sprintf("terminal_%d", harness.ID), "", "reload")
+	if got := screen(ids["shell"]); got != scrolled {
+		t.Errorf("docent reload scrolled tab 1; shell screen:\n%s\nwant:\n%s", got, scrolled)
+	}
+
+	// With two clients there are two plugin instances; only one writes.
+	attachArgs := []string{"-q", "/dev/null", "zellij", "attach", session}
+	if runtime.GOOS == "linux" {
+		attachArgs = []string{"-qfec", "zellij attach " + session, "/dev/null"}
+	}
+	// An open stdin keeps the client attached.
+	stdin, stdinW, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	client2 := exec.Command("script", attachArgs...)
+	client2.Env, client2.Stdin = env, stdin
+	if err := client2.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = client2.Process.Kill()
+		_ = client2.Wait()
+		_ = stdin.Close()
+		_ = stdinW.Close()
+	})
+	poll("second client", func() bool {
+		out, _ := zj("action", "list-clients")
+		return len(strings.Split(strings.TrimSpace(out), "\n")) == 3
+	})
+	scrolled = screen(ids["shell"])
+	runIn(ids["shell"], "", "open", "target.txt:3")
+	poll("editor to show line 3", func() bool {
+		for l := range strings.Lines(screen(ids["editor"])) {
+			if strings.Contains(l, " 3:1") {
+				return true
+			}
+		}
+		return false
+	})
+	const marker = "pasted-once"
+	runIn(ids["shell"], marker, "send", "text")
+	poll("paste in the harness", func() bool { return strings.Contains(screen(ids["harness"]), marker) })
+	time.Sleep(500 * time.Millisecond)
+	if got := screen(ids["harness"]); strings.Count(got, marker) != 1 || strings.Contains(got, "200~") {
+		t.Errorf("harness screen has %d pastes, or paste markers; want 1 paste and no markers:\n%s", strings.Count(got, marker), got)
+	}
+
+	// The plugin does not write after the deadline, nor without one.
+	for _, args := range []string{"pane=" + ids["harness"] + ",deadline=1", "pane=" + ids["harness"]} {
+		out, err := zj("pipe", "--name", "docent-write", "--args", args, "--", "not-written")
+		if want := map[bool]string{true: "late", false: ""}[strings.Contains(args, "deadline")]; err != nil || out != want {
+			t.Errorf("pipe --args %s = %q, %v; want %q", args, out, err, want)
+		}
+	}
+	time.Sleep(500 * time.Millisecond)
+	if got := screen(ids["harness"]); strings.Contains(got, "not-written") {
+		t.Errorf("plugin wrote after the deadline or without one:\n%s", got)
+	}
+	if got := screen(ids["shell"]); got != scrolled {
+		t.Errorf("writes with two clients scrolled tab 1; shell screen:\n%s\nwant:\n%s", got, scrolled)
 	}
 }

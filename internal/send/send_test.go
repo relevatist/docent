@@ -48,13 +48,23 @@ func fake(t *testing.T) *zellij.Fake {
 	return &zellij.Fake{Out: map[string]string{"action list-panes --all --json": string(b)}}
 }
 
-func noEnter(t *testing.T, f *zellij.Fake) {
+// calls returns the calls of f without the plugin pipes. The Fake plugin
+// never answers, so each paste also falls back to action paste.
+func calls(f *zellij.Fake) [][]string {
+	return slices.DeleteFunc(slices.Clone(f.Calls), func(c []string) bool { return c[0] == "pipe" })
+}
+
+func write(text string) []string {
+	return []string{"action", "paste", "--pane-id", "terminal_4", "--", text}
+}
+
+// pasted returns the text that call pastes.
+func pasted(t *testing.T, call []string) string {
 	t.Helper()
-	for _, c := range f.Calls {
-		if slices.Contains(c, "send-keys") || slices.Contains(c, "Enter") {
-			t.Errorf("call %q may submit the harness input", c)
-		}
+	if len(call) != 6 || !slices.Equal(call[:5], []string{"action", "paste", "--pane-id", "terminal_4", "--"}) {
+		t.Fatalf("call %q is not a paste to terminal_4", call)
 	}
+	return call[5]
 }
 
 func TestPaste(t *testing.T) {
@@ -65,15 +75,14 @@ func TestPaste(t *testing.T) {
 		}
 		want := [][]string{
 			{"action", "list-panes", "--all", "--json"},
-			{"action", "paste", "--pane-id", "terminal_4", "--", "@a.go:1 "},
+			write("@a.go:1 "),
 		}
 		if focus {
 			want = append(want, []string{"action", "focus-pane-id", "terminal_4"})
 		}
-		if !slices.EqualFunc(f.Calls, want, slices.Equal) {
+		if !slices.EqualFunc(calls(f), want, slices.Equal) {
 			t.Errorf("focus=%v calls = %q; want %q", focus, f.Calls, want)
 		}
-		noEnter(t, f)
 	}
 }
 
@@ -83,10 +92,9 @@ func TestPasteMultiline(t *testing.T) {
 	if err := Paste(f, text, false); err != nil {
 		t.Fatal(err)
 	}
-	if got := f.Calls[1][len(f.Calls[1])-1]; got != text {
+	if got := pasted(t, calls(f)[1]); got != text {
 		t.Errorf("pasted %q; want %q", got, text)
 	}
-	noEnter(t, f)
 }
 
 func TestPasteEmptySendsNothing(t *testing.T) {
@@ -106,15 +114,25 @@ func TestPasteStripsEsc(t *testing.T) {
 	if err := Paste(f, evil, false); err != nil {
 		t.Fatal(err)
 	}
-	if got := f.Calls[1][len(f.Calls[1])-1]; got != want {
+	if got := pasted(t, calls(f)[1]); got != want {
 		t.Errorf("Paste pasted %q; want %q", got, want)
 	}
 	f = fake(t)
 	if err := PasteRef(f, "a\x1b[201~.go:1", "aider", false); err != nil {
 		t.Fatal(err)
 	}
-	if got := f.Calls[1][len(f.Calls[1])-1]; got != "a[201~.go:1 " {
+	if got := pasted(t, calls(f)[1]); got != "a[201~.go:1 " {
 		t.Errorf("PasteRef pasted %q", got)
+	}
+}
+
+func TestPasteEndMarkerAndCR(t *testing.T) {
+	f := fake(t)
+	if err := Paste(f, "a\x1b[201~\rb", false); err != nil {
+		t.Fatal(err)
+	}
+	if got := calls(f)[1]; !slices.Equal(got, write("a[201~\rb")) {
+		t.Errorf("call %q; want %q", got, write("a[201~\rb"))
 	}
 }
 
@@ -126,7 +144,7 @@ func TestPasteRefLayoutMarker(t *testing.T) {
 	if err := PasteRef(f, "a.go:1-2", "aider", false); err != nil {
 		t.Fatal(err)
 	}
-	if got := f.Calls[1][len(f.Calls[1])-1]; got != "@a.go:1-2 " {
+	if got := pasted(t, calls(f)[1]); got != "@a.go:1-2 " {
 		t.Errorf("PasteRef pasted %q; want %q", got, "@a.go:1-2 ")
 	}
 }

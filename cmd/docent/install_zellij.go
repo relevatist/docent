@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,21 +19,73 @@ import (
 )
 
 const (
-	zellijBegin = "    // docent: begin (managed by `docent install`)\n"
-	zellijEnd   = "    // docent: end\n"
+	zellijBegin       = "    // docent: begin (managed by `docent install`)\n"
+	zellijEnd         = "    // docent: end\n"
+	zellijPluginBegin = "    // docent: plugin begin (managed by `docent install`)\n"
+	zellijPluginEnd   = "    // docent: plugin end\n"
 )
 
 var (
 	systemZellijDir = "/etc/zellij"
 	goos            = runtime.GOOS
 	writeString     = (*os.File).WriteString
-	errByHand       = errors.New(`docent cannot find where to add the key; add the shared_except "locked" node from assets/zellij/keys.kdl to the keybinds block by hand`)
-	errMarkers      = errors.New("more than one docent marker, or markers out of order")
-	errUnpaired     = errors.New("a `// docent: begin` line without a `// docent: end` line (or the reverse)")
-	keybindsLine    = regexp.MustCompile(`^keybinds([\s{]|$)`)
-	keybindsName    = regexp.MustCompile(`(^|[;{}])\s*"?keybinds"?([\s;{}]|$)`)
+	errMarkers      = errFix("more than one docent marker, or markers out of order")
 	altWBind        = regexp.MustCompile(`\bbind(\s+"[^"]*")*\s+"\s*(?i:alt)\s+w\s*"`)
 )
+
+// errFix is a problem with the docent markers, which the user must fix by
+// hand.
+type errFix string
+
+func (e errFix) Error() string { return string(e) }
+
+// markedNode is the docent node in a top-level block of the Zellij config.
+type markedNode struct {
+	block      string // keybinds, load_plugins
+	begin, end string // marker lines
+	node       string // lines between the markers
+	head       string // lines before the markers in a new block
+	what       string // name of the node in messages
+	byHand     string // what to add by hand
+	// conflict, if set, returns an error when a line outside the markers
+	// conflicts with the node. code is the line without comments, and lines
+	// starts with it.
+	conflict func(code string, lines []string) error
+}
+
+func keysNode() markedNode {
+	return markedNode{
+		block: "keybinds", begin: zellijBegin, end: zellijEnd, node: zellijNode(),
+		what:   "key",
+		byHand: `the shared_except "locked" node from assets/zellij/keys.kdl to the keybinds block`,
+		conflict: func(code string, lines []string) error {
+			if !altWBind.MatchString(code) {
+				return nil
+			}
+			if isAssetBind(lines) {
+				return fmt.Errorf(`"Alt w" is already bound by the docent snippet, added by hand (%s); remove it so that docent can manage it`, strings.TrimSpace(lines[0]))
+			}
+			return fmt.Errorf(`"Alt w" is already bound (%s); remove that bind first`, strings.TrimSpace(lines[0]))
+		},
+	}
+}
+
+// pluginNode loads the docent plugin at wasm.
+func pluginNode(wasm string) markedNode {
+	entry := kdlString("file:" + (&url.URL{Path: wasm}).EscapedPath())
+	return markedNode{
+		block: "load_plugins", begin: zellijPluginBegin, end: zellijPluginEnd,
+		node:   "    " + entry + "\n",
+		head:   "    \"zellij:link\"\n",
+		what:   "plugin",
+		byHand: entry + " to the load_plugins block",
+	}
+}
+
+// kdlString quotes s as a KDL string.
+func kdlString(s string) string {
+	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(s) + `"`
+}
 
 // zellijNode is the shared_except node inside the keybinds block of
 // assets/zellij/keys.kdl.
@@ -73,19 +126,27 @@ func platformZellijDir(home string) string {
 	return filepath.Join(home, ".config/zellij")
 }
 
-// editZellijConfig returns cfg with the marked docent node in its first
+// editZellijConfig returns cfg with the marked docent key node in its first
 // top-level keybinds block.
 func editZellijConfig(cfg string, force bool) (string, error) {
+	return editMarked(cfg, keysNode(), force)
+}
+
+// editMarked returns cfg with n in its first top-level n.block block.
+func editMarked(cfg string, n markedNode, force bool) (string, error) {
 	cfg, bom := strings.CutPrefix(cfg, "\ufeff")
-	out, err := editZellijCode(cfg, force)
+	out, err := editMarkedCode(cfg, n, force)
 	if bom && err == nil {
 		out = "\ufeff" + out
 	}
 	return out, err
 }
 
-func editZellijCode(cfg string, force bool) (string, error) {
-	block := zellijBegin + zellijNode() + zellijEnd
+func editMarkedCode(cfg string, n markedNode, force bool) (string, error) {
+	errByHand := fmt.Errorf("docent cannot find where to add the %s; add %s by hand", n.what, n.byHand)
+	blockLine := regexp.MustCompile(`^` + n.block + `([\s{]|$)`)
+	blockName := regexp.MustCompile(`(^|[;{}])\s*"?` + n.block + `"?([\s;{}]|$)`)
+	block := n.begin + n.node + n.end
 	code, depth, open, ok := kdlCode(cfg)
 	if !ok {
 		return "", errByHand
@@ -94,8 +155,8 @@ func editZellijCode(cfg string, force bool) (string, error) {
 	begin, end, hidden := -1, -1, false
 	for i, l := range lines {
 		l = strings.TrimSpace(l)
-		isBegin := l == strings.TrimSpace(zellijBegin)
-		if !isBegin && l != strings.TrimSpace(zellijEnd) {
+		isBegin := l == strings.TrimSpace(n.begin)
+		if !isBegin && l != strings.TrimSpace(n.end) {
 			continue
 		}
 		if i > 0 && open[i-1] {
@@ -117,23 +178,22 @@ func editZellijCode(cfg string, force bool) (string, error) {
 	case onlyHidden:
 		return "", errByHand
 	case unpaired:
-		return "", errUnpaired
+		return "", errFix(fmt.Sprintf("a `%s` line without a `%s` line (or the reverse)", strings.TrimSpace(n.begin), strings.TrimSpace(n.end)))
 	case end < begin:
 		return "", errMarkers
 	}
-	keybinds := -1
+	at := -1
 	for i, c := range code {
 		if begin >= 0 && i >= begin && i <= end {
 			continue
 		}
-		if altWBind.MatchString(c) {
-			if isAssetBind(lines[i:]) {
-				return "", fmt.Errorf(`"Alt w" is already bound by the docent snippet, added by hand (%s); remove it so that docent can manage it`, strings.TrimSpace(lines[i]))
+		if n.conflict != nil {
+			if err := n.conflict(c, lines[i:]); err != nil {
+				return "", err
 			}
-			return "", fmt.Errorf(`"Alt w" is already bound (%s); remove that bind first`, strings.TrimSpace(lines[i]))
 		}
-		if keybinds < 0 && keybindsName.MatchString(c) {
-			keybinds = i
+		if at < 0 && blockName.MatchString(c) {
+			at = i
 		}
 	}
 	join := func(ls []string) string { return strings.Join(ls, "") }
@@ -150,24 +210,24 @@ func editZellijCode(cfg string, force bool) (string, error) {
 			return cfg, nil
 		}
 		if !force {
-			return "", errors.New("the docent key node has changes; use --force to overwrite")
+			return "", fmt.Errorf("the docent %s node has changes; use --force to overwrite", n.what)
 		}
 		return join(lines[:begin]) + eol(block, lines[begin]) + join(lines[end+1:]), nil
-	case keybinds < 0:
+	case at < 0:
 		nl := eol("\n", lines[0])
 		if cfg != "" && !strings.HasSuffix(cfg, "\n") {
 			cfg += nl
 		}
-		return cfg + eol("keybinds {\n"+block+"}\n", nl), nil
+		return cfg + eol(n.block+" {\n"+n.head+block+"}\n", nl), nil
 	}
-	kb := strings.TrimSpace(code[keybinds])
-	topLevel := depth[keybinds] == 0 && !open[keybinds]
-	endsLine := strings.HasSuffix(lines[keybinds], "\n")
-	opensBlock := keybindsLine.MatchString(kb) && strings.HasSuffix(kb, "{")
+	head := strings.TrimSpace(code[at])
+	topLevel := depth[at] == 0 && !open[at]
+	endsLine := strings.HasSuffix(lines[at], "\n")
+	opensBlock := blockLine.MatchString(head) && strings.HasSuffix(head, "{")
 	if !topLevel || !endsLine || !opensBlock {
 		return "", errByHand
 	}
-	return join(lines[:keybinds+1]) + eol(block, lines[keybinds]) + join(lines[keybinds+1:]), nil
+	return join(lines[:at+1]) + eol(block, lines[at]) + join(lines[at+1:]), nil
 }
 
 // isAssetBind reports whether ls starts with the bind node of
@@ -265,29 +325,64 @@ func checkZellijConfig(cfg string) error {
 }
 
 type zellijTarget struct {
-	home, path, old, data string
-	exists                bool
+	home, wasm      string
+	path, old, data string // config.kdl
+	exists          bool
+	perm            kdlFile
 }
 
-// check finds the config and makes the new content. It returns a problem,
-// or "".
-func (z *zellijTarget) check(force bool) string {
+type kdlFile struct {
+	path, old, data string
+	exists          bool
+}
+
+// readLinked reads the file at path, or at the target of a symlink at path.
+// It returns the path of the file that it read.
+func readLinked(path string) (kdlFile, error) {
+	if fi, err := os.Lstat(path); err == nil && fi.Mode()&fs.ModeSymlink != 0 {
+		if path, err = filepath.EvalSymlinks(path); err != nil {
+			return kdlFile{}, err
+		}
+	}
+	old, err := os.ReadFile(path)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return kdlFile{}, err
+	}
+	return kdlFile{path: path, old: string(old), exists: err == nil}, nil
+}
+
+// check finds the config and the permission cache and makes their new
+// content, and checks that the plugin file can be written. It returns the
+// problems.
+func (z *zellijTarget) check(force bool) []string {
+	var problems []string
+	if p := z.checkConfig(force); p != "" {
+		problems = append(problems, p)
+	}
+	if p := z.checkPermissions(); p != "" {
+		problems = append(problems, p)
+	}
+	if err := checkWritable(filepath.Dir(z.wasm)); err != nil {
+		problems = append(problems, z.wasm+": "+err.Error())
+	}
+	return problems
+}
+
+func (z *zellijTarget) checkConfig(force bool) string {
 	path, err := zellijConfigPath(z.home)
 	if err != nil {
 		return err.Error()
 	}
-	if fi, err := os.Lstat(path); err == nil && fi.Mode()&fs.ModeSymlink != 0 {
-		if path, err = filepath.EvalSymlinks(path); err != nil {
-			return err.Error()
-		}
-	}
-	z.path = path
-	old, err := os.ReadFile(path)
-	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+	f, err := readLinked(path)
+	if err != nil {
 		return err.Error()
 	}
-	z.old, z.exists = string(old), err == nil
-	if z.data, err = editZellijConfig(z.old, force); errors.Is(err, errMarkers) || errors.Is(err, errUnpaired) {
+	path, z.path, z.old, z.exists = f.path, f.path, f.old, f.exists
+	z.data, err = editZellijConfig(z.old, force)
+	if err == nil {
+		z.data, err = editMarked(z.data, pluginNode(z.wasm), force)
+	}
+	if _, ok := errors.AsType[errFix](err); ok {
 		return fmt.Sprintf("%v; fix %s by hand", err, path)
 	} else if err != nil {
 		return path + ": " + err.Error()
@@ -312,6 +407,87 @@ func (z *zellijTarget) check(force bool) string {
 	return ""
 }
 
+func (z *zellijTarget) checkPermissions() string {
+	f, err := readLinked(filepath.Join(zellijCacheDir(z.home), "permissions.kdl"))
+	if err != nil {
+		return err.Error()
+	}
+	data, ok := editPermissions(f.old, z.wasm)
+	if !ok {
+		return f.path + ": docent cannot read this Zellij permission cache; fix or remove it"
+	}
+	f.data = data
+	z.perm = f
+	if f.exists && f.data == f.old {
+		return ""
+	}
+	if err := checkWritable(filepath.Dir(f.path)); err != nil {
+		return f.path + ": " + err.Error()
+	}
+	return ""
+}
+
+// zellijCacheDir is the cache dir of the Rust directories crate.
+func zellijCacheDir(home string) string {
+	if goos == "darwin" {
+		return filepath.Join(home, "Library/Caches/org.Zellij-Contributors.Zellij")
+	}
+	if x := os.Getenv("XDG_CACHE_HOME"); filepath.IsAbs(x) {
+		return filepath.Join(x, "zellij")
+	}
+	return filepath.Join(home, ".cache/zellij")
+}
+
+// zellijPermissions are the permissions that the plugin requests.
+var zellijPermissions = []string{"WriteToStdin", "ReadCliPipes", "ReadApplicationState"}
+
+var (
+	permHeader = regexp.MustCompile(`^\S.* \{$`)
+	permChild  = regexp.MustCompile(`^    \w+$`)
+)
+
+// editPermissions returns the Zellij permission cache with the entry for the
+// plugin at key set to zellijPermissions. ok is false when cache is not in
+// the form that Zellij writes.
+func editPermissions(cache, key string) (out string, ok bool) {
+	head := kdlString(key) + " {\n"
+	entry := head + "    " + strings.Join(zellijPermissions, "\n    ") + "\n}\n"
+	if cache != "" && !strings.HasSuffix(cache, "\n") {
+		return "", false
+	}
+	lines := strings.SplitAfter(cache, "\n")
+	lines = lines[:len(lines)-1]
+	start, from, to := -1, -1, -1
+	for i, l := range lines {
+		switch l = strings.TrimSuffix(l, "\n"); {
+		case start < 0 && permHeader.MatchString(l):
+			start = i
+		case start >= 0 && permChild.MatchString(l):
+		case start >= 0 && l == "}":
+			if from < 0 && lines[start] == head {
+				from, to = start, i
+			}
+			start = -1
+		default:
+			return "", false
+		}
+	}
+	if start >= 0 {
+		return "", false
+	}
+	if from < 0 {
+		return cache + entry, true
+	}
+	var got []string
+	for _, l := range lines[from+1 : to] {
+		got = append(got, strings.TrimSpace(l))
+	}
+	if slices.Equal(slices.Sorted(slices.Values(got)), slices.Sorted(slices.Values(zellijPermissions))) {
+		return cache, true
+	}
+	return strings.Join(lines[:from], "") + entry + strings.Join(lines[to+1:], ""), true
+}
+
 // checkWritable makes and removes a temp file in dir, or in its nearest
 // parent that exists.
 func checkWritable(dir string) error {
@@ -328,7 +504,17 @@ func checkWritable(dir string) error {
 	return errors.Join(f.Close(), os.Remove(f.Name()))
 }
 
+// apply always replaces the plugin file, like the Claude Code plugin.
 func (z *zellijTarget) apply(out io.Writer) error {
+	if err := replaceFile(z.wasm, string(assets.ZellijPlugin), 0o644); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(out, z.wasm); err != nil {
+		return err
+	}
+	if err := z.applyPermissions(out); err != nil {
+		return err
+	}
 	if z.exists && z.data == z.old {
 		_, err := fmt.Fprintln(out, z.path, "unchanged")
 		return err
@@ -360,19 +546,43 @@ func (z *zellijTarget) apply(out io.Writer) error {
 		if _, err := fmt.Fprintln(out, msg); err != nil {
 			return err
 		}
-	} else if err := os.MkdirAll(dir, 0o755); err != nil {
+	}
+	if err := replaceFile(z.path, z.data, mode); err != nil {
 		return err
 	}
-	tmp, err := writeTemp(dir, z.data, mode)
+	_, err := fmt.Fprintln(out, z.path)
+	return err
+}
+
+func (z *zellijTarget) applyPermissions(out io.Writer) error {
+	f := z.perm
+	if f.exists && f.data == f.old {
+		_, err := fmt.Fprintln(out, f.path, "unchanged")
+		return err
+	}
+	mode := fs.FileMode(0o644)
+	if fi, err := os.Stat(f.path); err == nil {
+		mode = fi.Mode().Perm()
+	}
+	if err := replaceFile(f.path, f.data, mode); err != nil {
+		return err
+	}
+	_, err := fmt.Fprintln(out, f.path)
+	return err
+}
+
+// replaceFile writes data with mode to a temp file and renames it to path.
+func replaceFile(path, data string, mode fs.FileMode) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	tmp, err := writeTemp(dir, data, mode)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = os.Remove(tmp) }()
-	if err := os.Rename(tmp, z.path); err != nil {
-		return err
-	}
-	_, err = fmt.Fprintln(out, z.path)
-	return err
+	return os.Rename(tmp, path)
 }
 
 // writeTemp writes data with mode to a new temp file in dir, syncs it, and

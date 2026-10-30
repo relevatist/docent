@@ -192,7 +192,7 @@ func TestInstallZellij(t *testing.T) {
 	if code := installCmd([]string{"zellij"}, &out, &errw, false, nil); code != 0 {
 		t.Fatalf("exit %d: %s", code, errw.String())
 	}
-	want, _ := editZellijConfig(userConfig, false)
+	want := installedConfig(t, userConfig, home)
 	if readFile(t, dotfile) != want {
 		t.Errorf("config:\n%s", readFile(t, dotfile))
 	}
@@ -316,7 +316,7 @@ func TestInstallZellijHardLink(t *testing.T) {
 }
 
 func TestInstallZellijNewFile(t *testing.T) {
-	tempHome(t)
+	home := tempHome(t)
 	fakeHarnesses(t, "zellij")
 	fakeZellij(t, "0")
 	dir := filepath.Join(t.TempDir(), "zj")
@@ -326,7 +326,7 @@ func TestInstallZellijNewFile(t *testing.T) {
 		t.Fatalf("exit %d: %s", code, errw.String())
 	}
 	cfg := filepath.Join(dir, "config.kdl")
-	if readFile(t, cfg) != "keybinds {\n"+managed(zellijNode())+"}\n" {
+	if readFile(t, cfg) != installedConfig(t, "", home) {
 		t.Errorf("config:\n%s", readFile(t, cfg))
 	}
 	if _, err := os.Stat(cfg + ".docent.bak"); !os.IsNotExist(err) {
@@ -369,17 +369,225 @@ func TestInstallZellijRefused(t *testing.T) {
 	}
 }
 
-// TestZellijNodeChecks runs the real zellij on a config with clear-defaults
-// and the marked node.
+// TestZellijNodeChecks runs the real zellij on configs with the marked
+// nodes.
 func TestZellijNodeChecks(t *testing.T) {
 	if _, err := exec.LookPath("zellij"); err != nil || testing.Short() {
 		t.Skip("needs zellij")
 	}
-	got, err := editZellijConfig(userConfig, false)
+	for _, cfg := range []string{userConfig, "", "load_plugins {\n    \"zellij:tab-bar\"\n}\n"} {
+		if err := checkZellijConfig(installedConfig(t, cfg, "/no such home")); err != nil {
+			t.Error(err)
+		}
+	}
+	if err := checkZellijConfig(installedConfig(t, userConfig, t.TempDir())); err != nil {
+		t.Error(err)
+	}
+}
+
+func testWasm(home string) string {
+	return filepath.Join(home, ".local/share/docent/zellij/docent.wasm")
+}
+
+// installedConfig is cfg with the key node and the plugin node for home.
+func installedConfig(t *testing.T, cfg, home string) string {
+	t.Helper()
+	cfg, err := editZellijConfig(cfg, false)
+	if err == nil {
+		cfg, err = editMarked(cfg, pluginNode(testWasm(home)), false)
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := checkZellijConfig(got); err != nil {
-		t.Error(err)
+	return cfg
+}
+
+func managedPlugin(wasm string) string {
+	return zellijPluginBegin + "    \"file:" + wasm + "\"\n" + zellijPluginEnd
+}
+
+func TestEditZellijPluginConfig(t *testing.T) {
+	block := managedPlugin("/w/docent.wasm")
+	for _, tc := range []struct {
+		name, wasm, cfg, want string
+	}{
+		{"empty", "/w/docent.wasm", "", "load_plugins {\n    \"zellij:link\"\n" + block + "}\n"},
+		{"insert after load_plugins line", "/w/docent.wasm",
+			"theme \"x\"\nload_plugins {\n    \"zellij:link\"\n}\n",
+			"theme \"x\"\nload_plugins {\n" + block + "    \"zellij:link\"\n}\n"},
+		{"same content", "/w/docent.wasm",
+			"load_plugins {\n" + block + "    \"zellij:link\"\n}\n",
+			"load_plugins {\n" + block + "    \"zellij:link\"\n}\n"},
+		{"no load_plugins node", "/w/docent.wasm", "theme \"x\"", "theme \"x\"\nload_plugins {\n    \"zellij:link\"\n" + block + "}\n"},
+		{"only the first block", "/w/docent.wasm",
+			"load_plugins {\n}\nload_plugins {\n}\n",
+			"load_plugins {\n" + block + "}\nload_plugins {\n}\n"},
+		{"key markers are not plugin markers", "/w/docent.wasm",
+			"keybinds {\n" + managed(zellijNode()) + "}\nload_plugins {\n}\n",
+			"keybinds {\n" + managed(zellijNode()) + "}\nload_plugins {\n" + block + "}\n"},
+		{"CRLF", "/w/docent.wasm", "load_plugins {\r\n}\r\n", "load_plugins {\r\n" + crlf(block) + "}\r\n"},
+		{"escaped path", "/a b/%\"/docent.wasm", "", "load_plugins {\n    \"zellij:link\"\n" +
+			zellijPluginBegin + "    \"file:/a%20b/%25%22/docent.wasm\"\n" + zellijPluginEnd + "}\n"},
+	} {
+		got, err := editMarked(tc.cfg, pluginNode(tc.wasm), false)
+		if err != nil {
+			t.Errorf("%s: %v", tc.name, err)
+		} else if got != tc.want {
+			t.Errorf("%s: got\n%s\nwant\n%s", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestEditZellijPluginConfigRefused(t *testing.T) {
+	block := managedPlugin("/w/docent.wasm")
+	for _, tc := range []struct {
+		name, cfg, msg string
+	}{
+		{"brace on next line", "load_plugins\n{\n}\n", `add "file:/w/docent.wasm" to the load_plugins block by hand`},
+		{"node on one line", "load_plugins { \"zellij:link\"; }\n", "by hand"},
+		{"not at line start", "theme \"x\"; load_plugins {\n}\n", "by hand"},
+		{"nested", "x {\n    load_plugins {\n    }\n}\n", "by hand"},
+		{"begin without end", "load_plugins {\n" + zellijPluginBegin + "}\n", "without a `// docent: plugin end` line"},
+		{"end without begin", "load_plugins {\n" + zellijPluginEnd + "}\n", "without a `// docent: plugin end` line"},
+		{"markers out of order", "load_plugins {\n" + zellijPluginEnd + zellijPluginBegin + "}\n", "markers out of order"},
+		{"two begin markers", "load_plugins {\n" + block + block + "}\n", "markers out of order"},
+		{"node changed", "load_plugins {\n" + managedPlugin("/old/docent.wasm") + "}\n", "plugin node has changes; use --force"},
+	} {
+		if _, err := editMarked(tc.cfg, pluginNode("/w/docent.wasm"), false); err == nil || !strings.Contains(err.Error(), tc.msg) {
+			t.Errorf("%s: err = %v; want it to contain %q", tc.name, err, tc.msg)
+		}
+	}
+}
+
+func TestEditZellijPluginConfigForce(t *testing.T) {
+	got, err := editMarked("load_plugins {\n"+managedPlugin("/old/docent.wasm")+"    x\n}\n", pluginNode("/w/docent.wasm"), true)
+	if want := "load_plugins {\n" + managedPlugin("/w/docent.wasm") + "    x\n}\n"; err != nil || got != want {
+		t.Errorf("got %v\n%s\nwant\n%s", err, got, want)
+	}
+}
+
+func TestEditZellijPermissions(t *testing.T) {
+	const (
+		entry = "\"/w/docent.wasm\" {\n    WriteToStdin\n    ReadCliPipes\n    ReadApplicationState\n}\n"
+		other = "\"/x/other.wasm\" {\n    RunCommands\n}\nzellij:link {\n}\n"
+	)
+	for _, tc := range []struct {
+		name, cache, want string
+	}{
+		{"no file", "", entry},
+		{"other entries kept", other, other + entry},
+		{"same permissions", other + "\"/w/docent.wasm\" {\n    ReadApplicationState\n    WriteToStdin\n    ReadCliPipes\n}\n",
+			other + "\"/w/docent.wasm\" {\n    ReadApplicationState\n    WriteToStdin\n    ReadCliPipes\n}\n"},
+		{"other permissions", "\"/w/docent.wasm\" {\n    WriteToStdin\n}\n" + other, entry + other},
+		{"denied", "a {\n}\n\"/w/docent.wasm\" {\n}\nb {\n}\n", "a {\n}\n" + entry + "b {\n}\n"},
+		{"file: key is another plugin", "\"file:/w/docent.wasm\" {\n}\n", "\"file:/w/docent.wasm\" {\n}\n" + entry},
+	} {
+		got, ok := editPermissions(tc.cache, "/w/docent.wasm")
+		if !ok || got != tc.want {
+			t.Errorf("%s: got %v\n%s\nwant\n%s", tc.name, ok, got, tc.want)
+		}
+	}
+	for _, bad := range []string{
+		"x",
+		"a {\n}",
+		"a {\n    X\n",
+		"a { X; }\n",
+		"\n",
+		"a {\n    X Y\n}\n",
+		"}\n",
+	} {
+		if got, ok := editPermissions(bad, "/w/docent.wasm"); ok {
+			t.Errorf("%q: got %q, want not ok", bad, got)
+		}
+	}
+}
+
+func TestZellijCacheDir(t *testing.T) {
+	t.Cleanup(func() { goos = runtime.GOOS })
+	for _, tc := range []struct{ goos, xdg, want string }{
+		{"darwin", "/xdg", "/h/Library/Caches/org.Zellij-Contributors.Zellij"},
+		{"linux", "/xdg", "/xdg/zellij"},
+		{"linux", "xdg", "/h/.cache/zellij"},
+		{"linux", "", "/h/.cache/zellij"},
+	} {
+		goos = tc.goos
+		t.Setenv("XDG_CACHE_HOME", tc.xdg)
+		if got := zellijCacheDir("/h"); got != tc.want {
+			t.Errorf("%s, XDG_CACHE_HOME=%q: got %q, want %q", tc.goos, tc.xdg, got, tc.want)
+		}
+	}
+}
+
+func TestInstallZellijPlugin(t *testing.T) {
+	home := tempHome(t)
+	fakeHarnesses(t, "zellij")
+	fakeZellij(t, "0")
+	data := filepath.Join(t.TempDir(), "data")
+	t.Setenv("XDG_DATA_HOME", data)
+	wasm := filepath.Join(data, "docent/zellij/docent.wasm")
+	cfg := filepath.Join(home, ".config/zellij/config.kdl")
+	perms := filepath.Join(zellijCacheDir(home), "permissions.kdl")
+	other := "\"/x/other.wasm\" {\n    RunCommands\n}\n"
+	writeTestFile(t, perms, other)
+	install := func(args ...string) (int, string, string) {
+		var out, errw bytes.Buffer
+		code := installCmd(append([]string{"zellij"}, args...), &out, &errw, false, nil)
+		return code, out.String(), errw.String()
+	}
+
+	code, out, errs := install()
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, errs)
+	}
+	if readFile(t, wasm) != string(assets.ZellijPlugin) {
+		t.Error("wasm not written")
+	}
+	if !strings.Contains(readFile(t, cfg), "\"file:"+wasm+"\"") {
+		t.Errorf("config does not load %s:\n%s", wasm, readFile(t, cfg))
+	}
+	if want, _ := editPermissions(other, wasm); readFile(t, perms) != want {
+		t.Errorf("permissions:\n%s", readFile(t, perms))
+	}
+	for _, p := range []string{wasm, cfg, perms} {
+		if !strings.Contains(out, p+"\n") {
+			t.Errorf("output does not name %s:\n%s", p, out)
+		}
+	}
+
+	if code, out, errs := install(); code != 0 || !strings.Contains(out, perms+" unchanged") || !strings.Contains(out, cfg+" unchanged") {
+		t.Fatalf("rerun: exit %d: %s%s", code, out, errs)
+	}
+
+	writeTestFile(t, wasm, "old")
+	if code, _, errs := install(); code != 0 {
+		t.Fatalf("changed wasm: exit %d: %s", code, errs)
+	}
+	if readFile(t, wasm) != string(assets.ZellijPlugin) {
+		t.Error("changed wasm not replaced")
+	}
+}
+
+func TestInstallZellijBadPermissions(t *testing.T) {
+	home := tempHome(t)
+	fakeHarnesses(t, "codex", "zellij")
+	fakeZellij(t, "0")
+	cfg := filepath.Join(home, ".config/zellij/config.kdl")
+	writeTestFile(t, cfg, userConfig)
+	perms := filepath.Join(zellijCacheDir(home), "permissions.kdl")
+	writeTestFile(t, perms, "a { X; }\n")
+	var out, errw bytes.Buffer
+	if code := installCmd([]string{"codex", "zellij"}, &out, &errw, false, nil); code == 0 {
+		t.Fatal("want non-zero exit")
+	}
+	if !strings.Contains(errw.String(), perms+": docent cannot read") {
+		t.Errorf("error does not name %s: %s", perms, errw.String())
+	}
+	if readFile(t, cfg) != userConfig || readFile(t, perms) != "a { X; }\n" {
+		t.Error("config or permissions changed")
+	}
+	for _, p := range []string{testWasm(home), filepath.Join(home, ".agents")} {
+		if _, err := os.Stat(p); !os.IsNotExist(err) {
+			t.Errorf("wrote %s although the permission cache was refused", p)
+		}
 	}
 }

@@ -34,6 +34,17 @@ If only `/etc/zellij` exists, docent refuses and tells you to copy its `config.k
 
 docent puts the key between `// docent: begin` and `// docent: end` lines, on the line after the first `keybinds ... {` line. If there is no `keybinds` block, docent appends one.
 
+docent also loads its Zellij plugin. It puts `"file:<plugin path>"` between `// docent: plugin begin` and `// docent: plugin end` lines, on the line after the first `load_plugins {` line. If there is no `load_plugins` block, docent appends one with `"zellij:link"` (the Zellij default) and the plugin. The same rules apply as for the key. See [Install](install.md#what-docent-install-zellij-writes).
+
+```kdl
+load_plugins {
+    // docent: plugin begin (managed by `docent install`)
+    "file:/home/me/.local/share/docent/zellij/docent.wasm"
+    // docent: plugin end
+    "zellij:link"
+}
+```
+
 - docent changes nothing else in the file. Before it appends a block, it adds a newline at the end of the file if there is none.
 - It keeps a byte order mark and CRLF line endings.
 - If the config is a symlink, docent changes the file that it points to.
@@ -42,7 +53,7 @@ docent does not install the key, and tells you why, when:
 
 - your config already binds `Alt w` (in any case, for example `"alt w"`), also when it is the snippet that you added by hand. Remove it, and docent adds it between the markers. docent does not find rare forms, for example `"Alt\tw"`, a quoted `"bind"`, a `\"` before the key, or a `\` line continuation.
 - you changed the lines between the markers. Use `--force` to replace them.
-- there is more than one `// docent: begin` or `// docent: end` line, they are out of order, or one of them is missing. Fix the file by hand.
+- there is more than one `// docent: begin` or `// docent: end` line (or `// docent: plugin begin` or `// docent: plugin end` line), they are out of order, or one of them is missing. Fix the file by hand.
 - it cannot find where to put the key. For example, the `{` of `keybinds` is on the next line, another node is before `keybinds` on its line, or a comment or string opens on the `keybinds` line.
 - it cannot write to the directory of the config.
 - the config has other hard links. docent would split them. Add the key by hand, or replace the hard link with a symlink.

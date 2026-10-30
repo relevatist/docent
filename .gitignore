@@ -1,1 +1,3 @@
 /bin/
+/plugin/target/
+/assets/zellij/docent.wasm

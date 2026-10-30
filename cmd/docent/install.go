@@ -27,7 +27,7 @@ var harnesses = []harness{
 	{"claude", "Claude Code", "plugin: skill + reload hook"},
 	{"codex", "Codex", "skill"},
 	{"omp", "oh-my-pi", "skill + reload extension"},
-	{"zellij", "Zellij", "Alt w key for docent new"},
+	{"zellij", "Zellij", "Alt w key for docent new, pane write plugin"},
 }
 
 // pickFunc asks the user which harnesses to install for. ok is false when
@@ -65,7 +65,7 @@ func pickHarnesses(found []bool) ([]string, bool, error) {
 func installCmd(args []string, out, w io.Writer, tty bool, pick pickFunc) int {
 	fs := flag.NewFlagSet("install", flag.ContinueOnError)
 	fs.SetOutput(w)
-	force := fs.Bool("force", false, "overwrite a changed skill or extension file, or a changed docent key in the Zellij config")
+	force := fs.Bool("force", false, "overwrite a changed skill or extension file, or a changed docent node in the Zellij config")
 	var usageErr error
 	fs.Usage = func() {
 		_, usageErr = fmt.Fprintln(w, `Usage: docent install [claude|codex|omp|zellij]... [--force]
@@ -75,7 +75,8 @@ from a checklist.
   claude  Claude Code plugin (skill + reload hook), through the claude CLI
   codex   ~/.agents/skills/docent/SKILL.md
   omp     ~/.agents/skills/docent/SKILL.md, ~/.omp/agent/extensions/docent-reload.ts
-  zellij  Alt w key for docent new, in the Zellij config.kdl (keeps the config from before docent as config.kdl.docent.bak)`)
+  zellij  Alt w key for docent new and the docent plugin, in the Zellij config.kdl (keeps the config from before docent as config.kdl.docent.bak)
+          ~/.local/share/docent/zellij/docent.wasm, and its permissions in the Zellij permissions.kdl`)
 		fs.PrintDefaults()
 	}
 	var names []string
@@ -153,14 +154,14 @@ func newInstall(names []string, force bool) (*install, error) {
 		return nil, err
 	}
 	in := &install{names: names, force: force}
+	data := os.Getenv("XDG_DATA_HOME")
+	if !filepath.IsAbs(data) {
+		data = filepath.Join(home, ".local/share")
+	}
 	skill := fileTarget{filepath.Join(home, ".agents/skills/docent/SKILL.md"), assets.Skill}
 	for _, name := range names {
 		switch name {
 		case "claude":
-			data := os.Getenv("XDG_DATA_HOME")
-			if !filepath.IsAbs(data) {
-				data = filepath.Join(home, ".local/share")
-			}
 			in.pluginDir = filepath.Join(data, "docent/claude-plugin")
 			in.legacy = filepath.Join(home, ".claude/skills/docent/SKILL.md")
 		case "codex":
@@ -169,7 +170,7 @@ func newInstall(names []string, force bool) (*install, error) {
 			in.addFile(skill)
 			in.addFile(fileTarget{filepath.Join(home, ".omp/agent/extensions/docent-reload.ts"), assets.OmpExtension})
 		case "zellij":
-			in.zellij = &zellijTarget{home: home}
+			in.zellij = &zellijTarget{home: home, wasm: filepath.Join(data, "docent/zellij/docent.wasm")}
 		}
 	}
 	return in, nil
@@ -195,9 +196,7 @@ func (in *install) check() []string {
 		}
 	}
 	if in.zellij != nil {
-		if p := in.zellij.check(in.force); p != "" {
-			problems = append(problems, p)
-		}
+		problems = append(problems, in.zellij.check(in.force)...)
 	}
 	if in.pluginDir != "" && len(problems) == 0 {
 		if p := in.checkMarketplace(); p != "" {

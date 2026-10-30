@@ -94,8 +94,8 @@ func PasteRef(r zellij.Runner, ref, fallback string, focus bool) error {
 	return paste(r, pane.ID, text, focus)
 }
 
-// paste removes ESC from text, so the text cannot end the bracketed paste
-// early and submit what follows.
+// paste writes text to pane as one bracketed paste. It removes ESC from text,
+// so the text cannot end the paste early and submit what follows.
 func paste(r zellij.Runner, pane, text string, focus bool) error {
 	text = strings.ReplaceAll(text, "\x1b", "")
 	if err := zellij.Paste(r, pane, text); err != nil {

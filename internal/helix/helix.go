@@ -43,18 +43,12 @@ func Reload(r zellij.Runner, pane string) error {
 }
 
 // run leaves insert mode and closes any prompt (Esc Esc), so cmds are never
-// typed into the buffer, then runs each command.
+// typed into the buffer, then runs each command. Esc is the kitty encoding
+// CSI 27 u, as Zellij send-keys writes it.
 func run(r zellij.Runner, pane string, cmds ...string) error {
-	if err := zellij.SendKeys(r, pane, "Esc", "Esc"); err != nil {
-		return err
-	}
+	b := []byte("\x1b[27u\x1b[27u")
 	for _, c := range cmds {
-		if err := zellij.WriteChars(r, pane, c); err != nil {
-			return err
-		}
-		if err := zellij.SendKeys(r, pane, "Enter"); err != nil {
-			return err
-		}
+		b = append(b, c+"\r"...)
 	}
-	return nil
+	return zellij.Write(r, pane, b)
 }

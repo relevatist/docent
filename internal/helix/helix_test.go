@@ -9,16 +9,15 @@ import (
 	"github.com/relevatist/docent/internal/zellij"
 )
 
-func esc(p string) []string   { return []string{"action", "send-keys", "--pane-id", p, "Esc", "Esc"} }
-func enter(p string) []string { return []string{"action", "send-keys", "--pane-id", p, "Enter"} }
-func chars(p, s string) []string {
-	return []string{"action", "write-chars", "--pane-id", p, "--", s}
-}
-
-func check(t *testing.T, got, want [][]string) {
+// check checks that f got one plugin write of want, then the fallback,
+// because the Fake plugin never answers.
+func check(t *testing.T, f *zellij.Fake, pane, want string) {
 	t.Helper()
-	if !slices.EqualFunc(got, want, slices.Equal) {
-		t.Fatalf("calls:\n got %q\nwant %q", got, want)
+	if len(f.Calls) != 2 || !slices.Equal(f.Calls[0][:3], []string{"pipe", "--name", "docent-write"}) || f.Calls[0][len(f.Calls[0])-1] != want {
+		t.Fatalf("calls = %q; want a docent-write pipe of %q", f.Calls, want)
+	}
+	if w := zellij.WriteArgs(pane, []byte(want)); !slices.Equal(f.Calls[1], w) {
+		t.Fatalf("fallback = %q; want %q", f.Calls[1], w)
 	}
 }
 
@@ -26,21 +25,12 @@ func TestOpen(t *testing.T) {
 	tests := []struct {
 		name, path string
 		line       int
-		want       [][]string
+		want       string
 	}{
-		{"with line", "/abs/a.go", 42, [][]string{
-			esc("terminal_3"), chars("terminal_3", ":open '/abs/a.go'"), enter("terminal_3"),
-			chars("terminal_3", ":goto 42"), enter("terminal_3"),
-		}},
-		{"no line", "/abs/a.go", 0, [][]string{
-			esc("terminal_3"), chars("terminal_3", ":open '/abs/a.go'"), enter("terminal_3"),
-		}},
-		{"spaces", "/abs/my dir/a b.go", 0, [][]string{
-			esc("terminal_3"), chars("terminal_3", ":open '/abs/my dir/a b.go'"), enter("terminal_3"),
-		}},
-		{"quotes and percent", `/abs/it's "%{cwd}".go`, 0, [][]string{
-			esc("terminal_3"), chars("terminal_3", `:open '/abs/it''s "%{cwd}".go'`), enter("terminal_3"),
-		}},
+		{"with line", "/abs/a.go", 42, "\x1b[27u\x1b[27u:open '/abs/a.go'\r:goto 42\r"},
+		{"no line", "/abs/a.go", 0, "\x1b[27u\x1b[27u:open '/abs/a.go'\r"},
+		{"spaces", "/abs/my dir/a b.go", 0, "\x1b[27u\x1b[27u:open '/abs/my dir/a b.go'\r"},
+		{"quotes and percent", `/abs/it's "%{cwd}".go`, 0, "\x1b[27u\x1b[27u:open '/abs/it''s \"%{cwd}\".go'\r"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -48,7 +38,7 @@ func TestOpen(t *testing.T) {
 			if err := Open(f, "terminal_3", tt.path, tt.line); err != nil {
 				t.Fatal(err)
 			}
-			check(t, f.Calls, tt.want)
+			check(t, f, "terminal_3", tt.want)
 		})
 	}
 }
@@ -73,9 +63,7 @@ func TestOpenRelativeResolvesAgainstCwd(t *testing.T) {
 	if err := Open(f, "terminal_0", "sub/a.go", 0); err != nil {
 		t.Fatal(err)
 	}
-	check(t, f.Calls, [][]string{
-		esc("terminal_0"), chars("terminal_0", ":open '"+dir+"/sub/a.go'"), enter("terminal_0"),
-	})
+	check(t, f, "terminal_0", "\x1b[27u\x1b[27u:open '"+dir+"/sub/a.go'\r")
 }
 
 func TestReload(t *testing.T) {
@@ -83,5 +71,5 @@ func TestReload(t *testing.T) {
 	if err := Reload(f, "terminal_3"); err != nil {
 		t.Fatal(err)
 	}
-	check(t, f.Calls, [][]string{esc("terminal_3"), chars("terminal_3", ":reload-all"), enter("terminal_3")})
+	check(t, f, "terminal_3", "\x1b[27u\x1b[27u:reload-all\r")
 }

@@ -15,7 +15,7 @@ func tempHome(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	for _, k := range []string{"XDG_DATA_HOME", "XDG_CONFIG_HOME", "ZELLIJ_CONFIG_DIR", "ZELLIJ_CONFIG_FILE"} {
+	for _, k := range []string{"XDG_DATA_HOME", "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "ZELLIJ_CONFIG_DIR", "ZELLIJ_CONFIG_FILE"} {
 		t.Setenv(k, "")
 	}
 	return home

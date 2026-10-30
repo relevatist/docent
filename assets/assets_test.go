@@ -1,6 +1,7 @@
 package assets
 
 import (
+	"bytes"
 	"encoding/json"
 	"io/fs"
 	"os"
@@ -93,6 +94,12 @@ func TestClaudePluginFiles(t *testing.T) {
 		if _, err := fs.Stat(ClaudePlugin, name); err != nil {
 			t.Error(err)
 		}
+	}
+}
+
+func TestZellijPlugin(t *testing.T) {
+	if !bytes.HasPrefix(ZellijPlugin, []byte("\x00asm")) {
+		t.Errorf("ZellijPlugin does not start with the WASM magic bytes: % x", ZellijPlugin[:min(4, len(ZellijPlugin))])
 	}
 }
 
