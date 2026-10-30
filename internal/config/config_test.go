@@ -189,3 +189,24 @@ func TestResolveHome(t *testing.T) {
 		t.Errorf("Resolve = %+v, %v; want %+v", got, err, want)
 	}
 }
+
+func TestLayout(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	for s, want := range map[string]func(dir string) string{
+		"":                        func(string) string { return "" },
+		"layout = \"~/x.kdl\"\n":  func(string) string { return filepath.Join(home, "x.kdl") },
+		"layout = \"wide.kdl\"\n": func(dir string) string { return filepath.Join(dir, "wide.kdl") },
+		"layout = \"/a/b.kdl\"\n": func(string) string { return "/a/b.kdl" },
+	} {
+		write(t, s)
+		p, err := Path()
+		if err != nil {
+			t.Fatal(err)
+		}
+		c, err := Load()
+		if w := want(filepath.Dir(p)); err != nil || c.Layout != w {
+			t.Errorf("Load(%q).Layout = %q, %v; want %q", s, c.Layout, err, w)
+		}
+	}
+}

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/relevatist/docent/internal/config"
 	"github.com/relevatist/docent/internal/tui"
 	"github.com/relevatist/docent/internal/zellij"
 )
@@ -158,8 +159,8 @@ func TestNewHelp(t *testing.T) {
 
 func TestNewKeepsKind(t *testing.T) {
 	for _, tt := range []struct{ picked, want string }{
-		{"wrap omp", `"/usr/bin/env" {` + "\n" + `                    args "DOCENT_HARNESS_KIND=omp" "wrap" "omp"`},
-		{"wrap omp --x", `"wrap" {` + "\n" + `                    args "omp" "--x"`},
+		{"wrap omp", `"/usr/bin/env" {` + "\n" + `                args "DOCENT_HARNESS_KIND=omp" "wrap" "omp"`},
+		{"wrap omp --x", `"wrap" {` + "\n" + `                args "omp" "--x"`},
 	} {
 		dir, _ := appDir(t)
 		f := newFake(t, sandboxCfg, "/other", "/usr/bin/env DOCENT_HARNESS_KIND=omp wrap omp")
@@ -230,5 +231,52 @@ func TestNewPause(t *testing.T) {
 		if paused := r.n > 0 && strings.HasSuffix(w.String(), "press enter to close"); paused != tt.want {
 			t.Errorf("%s: reads %d, output %q; want pause %v", tt.name, r.n, w.String(), tt.want)
 		}
+	}
+}
+
+func TestCurrentLayout(t *testing.T) {
+	c := config.Config{Layout: "/conf/wide.kdl"}
+	for _, tt := range []struct {
+		harness string
+		c       config.Config
+		path    string
+		builtin bool
+	}{
+		{"/usr/bin/env DOCENT_HARNESS_KIND=claude DOCENT_LAYOUT=/my%20layouts/pair.kdl claude", c, "/my layouts/pair.kdl", false},
+		{"claude", c, "", true},
+		{"claude", config.Config{}, "", true},
+		{"", c, "/conf/wide.kdl", false},
+		{"", config.Config{}, "", true},
+	} {
+		f := newFake(t, "", "/other", tt.harness)
+		if path, builtin := currentLayout(f, tt.c); path != tt.path || builtin != tt.builtin {
+			t.Errorf("harness %q, config layout %q: got %q, %v; want %q, %v", tt.harness, tt.c.Layout, path, builtin, tt.path, tt.builtin)
+		}
+	}
+}
+
+func TestNewLayoutDeleted(t *testing.T) {
+	dir, _ := appDir(t)
+	missing := filepath.Join(t.TempDir(), "pair.kdl")
+	f := newFake(t, "", "/other", "/usr/bin/env DOCENT_HARNESS_KIND=claude DOCENT_LAYOUT="+missing+" claude")
+	var w bytes.Buffer
+	if code := newCmd(f, nil, &w, pickReturns(tui.Picked{Dir: dir, Harness: "claude"})); code != 1 {
+		t.Errorf("exit %d; want 1", code)
+	}
+	if !strings.Contains(w.String(), missing) || hasCall(f, "action", "new-tab") {
+		t.Errorf("output %q, calls %q; want an error that names %s and no new tab", w.String(), f.Calls, missing)
+	}
+}
+
+func TestNewKeepsLayout(t *testing.T) {
+	dir, _ := appDir(t)
+	pair := filepath.Join(t.TempDir(), "pair.kdl")
+	writeTestFile(t, pair, fmt.Sprintf(testLayout, "pair"))
+	f := newFake(t, "", "/other", "/usr/bin/env DOCENT_HARNESS_KIND=claude DOCENT_LAYOUT="+pair+" claude")
+	if code := newCmd(f, nil, os.Stderr, pickReturns(tui.Picked{Dir: dir, Harness: "claude"})); code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	if tab := lastNewTab(t, f); !strings.Contains(tab[3], "// pair") || !strings.Contains(tab[3], `"DOCENT_LAYOUT=`+pair+`"`) {
+		t.Errorf("new-tab layout\n%s\nwant %s with its marker", tab[3], pair)
 	}
 }

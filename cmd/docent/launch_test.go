@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -41,7 +42,7 @@ func launchInZellij(t *testing.T, cfg, harness string, w io.Writer) string {
 	}
 	t.Setenv("ZELLIJ", "0")
 	f := &zellij.Fake{Out: map[string]string{"--version": "zellij 0.45.1"}}
-	if err := launchDir(f, nil, w, t.TempDir(), "", harness, ""); err != nil {
+	if err := launchDir(f, nil, w, t.TempDir(), "", harness, "", "", false); err != nil {
 		t.Fatal(err)
 	}
 	last := f.Calls[len(f.Calls)-1]
@@ -72,7 +73,7 @@ func TestLaunchRecordsRecent(t *testing.T) {
 	dir := t.TempDir()
 	f := &zellij.Fake{Out: map[string]string{"--version": "zellij 0.45.1"}}
 	var w bytes.Buffer
-	if err := launchDir(f, nil, &w, dir, "", "cat", ""); err != nil {
+	if err := launchDir(f, nil, &w, dir, "", "cat", "", "", false); err != nil {
 		t.Fatal(err)
 	}
 	if dirs, err := recent.Load(); err != nil || !slices.Equal(dirs, []string{dir}) {
@@ -111,10 +112,79 @@ func TestLaunchRecordsBeforeAttach(t *testing.T) {
 		}
 		return nil
 	}
-	if err := launchDir(f, attach, io.Discard, dir, "", "cat", ""); err != nil {
+	if err := launchDir(f, attach, io.Discard, dir, "", "cat", "", "", false); err != nil {
 		t.Fatal(err)
 	}
 	if attached != 1 {
 		t.Errorf("attach called %d times; want 1", attached)
+	}
+}
+
+const testLayout = `layout {
+    tab name={{.Name}} {
+        pane name="harness" {{.Harness}}
+        pane name="shell"
+        pane name="editor" command="hx" // %s
+    }
+}
+`
+
+func TestLaunchLayout(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	conf := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", conf)
+	t.Setenv("ZELLIJ", "0")
+	writeTestFile(t, filepath.Join(conf, "docent", "config.toml"), `layout = "wide.kdl"`)
+	wide := filepath.Join(conf, "docent", "wide.kdl")
+	writeTestFile(t, wide, fmt.Sprintf(testLayout, "wide"))
+	pair := filepath.Join(t.TempDir(), "pair.kdl")
+	writeTestFile(t, pair, fmt.Sprintf(testLayout, "pair"))
+	for _, tc := range []struct {
+		layout  string
+		builtin bool
+		want    string
+	}{
+		{"", false, "// wide"},
+		{pair, false, "// pair"},
+		{"", true, "zellij:tab-bar"},
+	} {
+		f := &zellij.Fake{Out: map[string]string{"--version": "zellij 0.45.1"}}
+		if err := launchDir(f, nil, io.Discard, t.TempDir(), "", "cat", "", tc.layout, tc.builtin); err != nil {
+			t.Fatal(err)
+		}
+		if kdl := f.Calls[len(f.Calls)-1][3]; !strings.Contains(kdl, tc.want) {
+			t.Errorf("layout %q, builtin %v: want %q in\n%s", tc.layout, tc.builtin, tc.want, kdl)
+		}
+	}
+}
+
+func TestLaunchLayoutMissing(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("ZELLIJ", "0")
+	missing := filepath.Join(t.TempDir(), "no-such.kdl")
+	f := &zellij.Fake{}
+	err := launchDir(f, nil, io.Discard, t.TempDir(), "", "cat", "", missing, false)
+	if err == nil || !strings.Contains(err.Error(), missing) || len(f.Calls) != 0 {
+		t.Errorf("want error naming %s and no zellij calls, got %v, calls %q", missing, err, f.Calls)
+	}
+	if code := runLaunch([]string{"--layout", missing, t.TempDir()}); code != 1 {
+		t.Errorf("runLaunch: exit %d; want 1", code)
+	}
+}
+
+func TestLayoutFlag(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := t.TempDir()
+	t.Chdir(dir)
+	for p, want := range map[string]string{
+		"":           "",
+		"~/x.kdl":    filepath.Join(home, "x.kdl"),
+		"./pair.kdl": filepath.Join(dir, "pair.kdl"),
+		"/a/b.kdl":   "/a/b.kdl",
+	} {
+		if got, err := layoutFlag(p); err != nil || got != want {
+			t.Errorf("layoutFlag(%q) = %q, %v; want %q", p, got, err, want)
+		}
 	}
 }

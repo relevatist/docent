@@ -104,7 +104,20 @@ func newWorkstream(r zellij.Runner, w io.Writer, pick pickerFunc) error {
 	if p.Harness != harness {
 		kind = ""
 	}
-	return launchDir(r, attach, w, p.Dir, name, p.Harness, kind)
+	layout, builtin := currentLayout(r, c)
+	return launchDir(r, attach, w, p.Dir, name, p.Harness, kind, layout, builtin)
+}
+
+// currentLayout returns the layout of the caller's tab: the path in the
+// layout marker of its harness pane, or builtin for a harness pane without
+// one. Without a harness pane, it returns the config layout.
+func currentLayout(r zellij.Runner, c config.Config) (path string, builtin bool) {
+	p, err := panes.Lookup(r, "harness")
+	if err != nil {
+		return c.Layout, c.Layout == ""
+	}
+	path, _ = panes.LayoutMarker(p.Command)
+	return path, path == ""
 }
 
 // currentHarness returns the harness of the caller's tab: an alias name when

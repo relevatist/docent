@@ -20,3 +20,6 @@ var OmpExtension string
 
 //go:embed zellij/keys.kdl
 var ZellijKeys string
+
+//go:embed zellij/layout.kdl
+var ZellijLayout string

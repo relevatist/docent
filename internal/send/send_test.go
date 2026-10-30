@@ -117,3 +117,16 @@ func TestPasteStripsEsc(t *testing.T) {
 		t.Errorf("PasteRef pasted %q", got)
 	}
 }
+
+func TestPasteRefLayoutMarker(t *testing.T) {
+	t.Setenv("ZELLIJ_PANE_ID", "3")
+	f := &zellij.Fake{Out: map[string]string{"action list-panes --all --json": `[
+		{"id":3,"title":"shell","tab_id":0},
+		{"id":4,"title":"harness","tab_id":0,"terminal_command":"/usr/bin/env DOCENT_HARNESS_KIND=claude DOCENT_LAYOUT=/x.kdl claude"}]`}}
+	if err := PasteRef(f, "a.go:1-2", "aider", false); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.Calls[1][len(f.Calls[1])-1]; got != "@a.go:1-2 " {
+		t.Errorf("PasteRef pasted %q; want %q", got, "@a.go:1-2 ")
+	}
+}

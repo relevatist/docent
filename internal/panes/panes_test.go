@@ -99,7 +99,11 @@ func TestMarker(t *testing.T) {
 		{"/usr/bin/env DOCENT_HARNESS_KIND=omp sandbox-exec -f omp.sb omp", "omp", "sandbox-exec -f omp.sb omp"},
 		{"env DOCENT_HARNESS_KIND=omp omp", "omp", "omp"},
 		{"/usr/bin/env FOO=1 omp", "", "/usr/bin/env FOO=1 omp"},
+		{"/usr/bin/env DOCENT_DEBUG=1 claude", "", "/usr/bin/env DOCENT_DEBUG=1 claude"},
 		{"/usr/bin/env DOCENT_HARNESS_KIND=omp", "", "/usr/bin/env DOCENT_HARNESS_KIND=omp"},
+		{"/usr/bin/env DOCENT_HARNESS_KIND=claude DOCENT_LAYOUT=/x.kdl claude", "claude", "claude"},
+		{"/usr/bin/env DOCENT_LAYOUT=/x.kdl DOCENT_HARNESS_KIND=claude claude --x", "claude", "claude --x"},
+		{"/usr/bin/env DOCENT_HARNESS_KIND=omp FOO=1 DOCENT_LAYOUT=/x.kdl omp", "omp", "FOO=1 DOCENT_LAYOUT=/x.kdl omp"},
 	}
 	for _, tt := range tests {
 		kind, ok := Marker(tt.cmd)
@@ -108,6 +112,24 @@ func TestMarker(t *testing.T) {
 		}
 		if got := Unwrap(tt.cmd); got != tt.rest {
 			t.Errorf("Unwrap(%q) = %q; want %q", tt.cmd, got, tt.rest)
+		}
+	}
+}
+
+func TestLayoutMarker(t *testing.T) {
+	tests := []struct{ cmd, path string }{
+		{"claude", ""},
+		{"/usr/bin/env DOCENT_HARNESS_KIND=omp omp", ""},
+		{"/usr/bin/env DOCENT_HARNESS_KIND=claude DOCENT_LAYOUT=/x.kdl claude", "/x.kdl"},
+		{"/usr/bin/env DOCENT_HARNESS_KIND=claude DOCENT_LAYOUT=/my%20layouts/pair.kdl claude", "/my layouts/pair.kdl"},
+		{"/usr/bin/env DOCENT_HARNESS_KIND=omp FOO=1 DOCENT_LAYOUT=/x.kdl omp", ""},
+		{"/usr/bin/env DOCENT_HARNESS_KIND=claude DOCENT_LAYOUT=/x.kdl", ""},
+		{"/usr/bin/env DOCENT_HARNESS_KIND=claude DOCENT_LAYOUT= claude", ""},
+	}
+	for _, tt := range tests {
+		path, ok := LayoutMarker(tt.cmd)
+		if path != tt.path || ok != (tt.path != "") {
+			t.Errorf("LayoutMarker(%q) = %q, %v; want %q", tt.cmd, path, ok, tt.path)
 		}
 	}
 }

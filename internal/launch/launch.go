@@ -6,60 +6,77 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"text/template"
 
 	"github.com/relevatist/docent/internal/config"
 	"github.com/relevatist/docent/internal/panes"
 	"github.com/relevatist/docent/internal/zellij"
 )
 
-const layout = `layout {
-    default_tab_template {
-        pane size=1 borderless=true {
-            plugin location="zellij:tab-bar"
-        }
-        children
-        pane size=2 borderless=true {
-            plugin location="zellij:status-bar"
-        }
-    }
-    tab name=%s {
-        pane split_direction="vertical" {
-            pane name="editor" command="hx" size="60%%" focus=true
-            pane split_direction="horizontal" {
-                pane name="harness" command=%s%s
-                pane name="shell"
-            }
-        }
-    }
+type fields struct {
+	Name    string
+	harness string
+	used    bool
 }
-`
 
-// Layout returns the workstream KDL layout for a tab called name. The harness
-// command is split on spaces into a command and its args; shell quoting is not
-// supported. When the harness kind differs from the base name of the command,
-// the pane runs through env with DOCENT_HARNESS_KIND set, so the pane command
-// shows the kind.
-func Layout(harness config.Harness, name string) (string, error) {
+func (f *fields) Harness() string {
+	f.used = true
+	return f.harness
+}
+
+// Layout renders the KDL layout template tmpl for a tab called name. The
+// template gets {{.Name}}, the quoted name, and {{.Harness}}, the harness pane
+// command and args. layoutPath names the template in errors; "" means the
+// built-in layout. The harness command is split on spaces into a command and
+// its args; shell quoting is not supported. When the harness kind differs from
+// the base name of the command, the pane runs through env with
+// DOCENT_HARNESS_KIND set, so the pane command shows the kind. With a
+// layoutPath, the pane always runs through env, with DOCENT_HARNESS_KIND and
+// DOCENT_LAYOUT, the path URL-escaped.
+func Layout(tmpl string, harness config.Harness, layoutPath, name string) (string, error) {
 	f := strings.Fields(harness.Command)
 	if len(f) == 0 {
 		return "", errors.New("harness command is empty")
 	}
-	if harness.Kind != "" && harness.Kind != filepath.Base(f[0]) {
-		f = append([]string{"/usr/bin/env", panes.KindVar + "=" + harness.Kind}, f...)
+	kind := cmp.Or(harness.Kind, filepath.Base(f[0]))
+	switch {
+	case layoutPath != "":
+		f = append([]string{"/usr/bin/env", panes.KindVar + "=" + kind, panes.LayoutVar + "=" + (&url.URL{Path: layoutPath}).EscapedPath()}, f...)
+	case kind != filepath.Base(f[0]):
+		f = append([]string{"/usr/bin/env", panes.KindVar + "=" + kind}, f...)
 	}
-	args := ""
+	data := &fields{Name: quote(name), harness: "command=" + quote(f[0])}
 	if len(f) > 1 {
 		q := make([]string, len(f)-1)
 		for i, a := range f[1:] {
 			q[i] = quote(a)
 		}
-		args = " {\n                    args " + strings.Join(q, " ") + "\n                }"
+		data.harness += " {\n                args " + strings.Join(q, " ") + "\n            }"
 	}
-	return fmt.Sprintf(layout, quote(name), quote(f[0]), args), nil
+	file := cmp.Or(layoutPath, "built-in layout")
+	t, err := template.New(file).Option("missingkey=error").Parse(tmpl)
+	if err != nil {
+		return "", err
+	}
+	var b strings.Builder
+	if err := t.Execute(&b, data); err != nil {
+		return "", fmt.Errorf("%w (fields: {{.Name}}, {{.Harness}})", err)
+	}
+	if !data.used {
+		return "", fmt.Errorf("%s: layout does not use {{.Harness}}", file)
+	}
+	kdl := b.String()
+	for _, p := range []string{"editor", "harness", "shell"} {
+		if !strings.Contains(kdl, `name="`+p+`"`) {
+			return "", fmt.Errorf("%s: layout has no pane named %q", file, p)
+		}
+	}
+	return kdl, nil
 }
 
 func quote(s string) string {
@@ -69,15 +86,17 @@ func quote(s string) string {
 // Attach runs zellij with args in dir, attached to the terminal.
 type Attach func(dir string, args ...string) error
 
-// Run opens the workstream for the absolute dir: a new tab when inZellij,
-// else a session. Both are called name, or the dir basename if name is empty. If that session is live, the tab is added
-// to it and docent attaches; if it is exited, its record is deleted and a new session starts. It warns on w when zellij is below 0.45.
-func Run(r zellij.Runner, attach Attach, w io.Writer, dir, name string, harness config.Harness, inZellij bool) (err error) {
+// Run opens the workstream for the absolute dir with the layout template tmpl
+// (see Layout): a new tab when inZellij, else a session. Both are called name,
+// or the dir basename if name is empty. If that session is live, the tab is
+// added to it and docent attaches; if it is exited, its record is deleted and
+// a new session starts. It warns on w when zellij is below 0.45.
+func Run(r zellij.Runner, attach Attach, w io.Writer, dir, name string, harness config.Harness, tmpl, layoutPath string, inZellij bool) (err error) {
 	if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
 		return fmt.Errorf("%s: not a directory", dir)
 	}
 	name = cmp.Or(name, filepath.Base(dir))
-	kdl, err := Layout(harness, name)
+	kdl, err := Layout(tmpl, harness, layoutPath, name)
 	if err != nil {
 		return err
 	}

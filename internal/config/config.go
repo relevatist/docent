@@ -19,6 +19,7 @@ type Config struct {
 	FocusOnSend bool               `toml:"focus_on_send"`
 	Roots       []string           `toml:"roots"`
 	Harnesses   map[string]Harness `toml:"harnesses"`
+	Layout      string             `toml:"layout"` // absolute path; empty for the built-in layout
 }
 
 // Harness is a harness command and its kind, the harness that the command
@@ -64,16 +65,24 @@ func Load() (Config, error) {
 		}
 		c.Harnesses[name] = h
 	}
+	if c.Layout != "" {
+		if c.Layout, err = ExpandHome(c.Layout); err != nil {
+			return c, err
+		}
+		if !filepath.IsAbs(c.Layout) {
+			c.Layout = filepath.Join(filepath.Dir(p), c.Layout)
+		}
+	}
 	for i := range c.Roots {
-		if c.Roots[i], err = expandHome(c.Roots[i]); err != nil {
+		if c.Roots[i], err = ExpandHome(c.Roots[i]); err != nil {
 			return c, err
 		}
 	}
 	return c, nil
 }
 
-// expandHome replaces a leading ~ or ~/ in p with the home directory.
-func expandHome(p string) (string, error) {
+// ExpandHome replaces a leading ~ or ~/ in p with the home directory.
+func ExpandHome(p string) (string, error) {
 	if p != "~" && !strings.HasPrefix(p, "~/") {
 		return p, nil
 	}
@@ -84,12 +93,12 @@ func expandHome(p string) (string, error) {
 	return filepath.Join(home, p[1:]), nil
 }
 
-// expandWords applies expandHome to each word of cmd.
+// expandWords applies ExpandHome to each word of cmd.
 func expandWords(cmd string) (string, error) {
 	words := strings.Fields(cmd)
 	for i := range words {
 		var err error
-		if words[i], err = expandHome(words[i]); err != nil {
+		if words[i], err = ExpandHome(words[i]); err != nil {
 			return cmd, err
 		}
 	}

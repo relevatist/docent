@@ -16,7 +16,7 @@ func TestUsageListsSubcommands(t *testing.T) {
 	if strings.Contains(b.String(), "docent diff") {
 		t.Errorf("usage lists the removed diff command:\n%s", b.String())
 	}
-	for _, name := range []string{"open", "reload", "send", "tour", "tour-view", "install", "new", "[dir]", "[--harness cmd|alias]"} {
+	for _, name := range []string{"open", "reload", "send", "tour", "tour-view", "install", "new", "[dir]", "[--harness cmd|alias]", "[--layout file]"} {
 		if !strings.Contains(b.String(), name) {
 			t.Errorf("usage missing %q:\n%s", name, b.String())
 		}

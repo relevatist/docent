@@ -2,7 +2,7 @@
 
 docent joins an editor (Helix), a coding harness (Claude Code, oh-my-pi, codex, ...), and a shell in one Zellij tab. The harness can show you code in the editor and walk you through its changes one step at a time.
 
-![docent: Helix on the left, the harness and a tour pane on the right](demo.png)
+![docent: Helix on the left, the harness and a tour pane on the right (old layout)](demo.png)
 
 Requirements: macOS or Linux, Zellij 0.45+, Helix 25.07+, Go 1.27+ (to build), fzf (for `docent new`).
 
@@ -25,12 +25,14 @@ Details: [Install](docs/install.md), [Uninstall](docs/install.md#uninstall).
 
 | Pane | Position | Runs |
 |------|----------|------|
-| `editor` | left | `hx` |
-| `harness` | top right | the harness command |
-| `shell` | bottom right | your shell |
+| `harness` | left, has focus | the harness command |
+| `shell` | top right | your shell |
+| `editor` | bottom right | `hx` |
 | `tour` | stacked with `shell` | the tour pane, while a tour runs |
 
 Do not rename the panes. docent commands find them by name.
+
+The built-in layout is [`assets/zellij/layout.kdl`](assets/zellij/layout.kdl). The screenshot above shows the old layout, with the editor on the left. To use your own layout, see [Custom layout](docs/workstreams.md#custom-layout).
 
 ## Open a workstream
 
@@ -38,6 +40,7 @@ Do not rename the panes. docent commands find them by name.
 docent                           # workstream for the current directory
 docent ~/src/app                 # workstream for ~/src/app
 docent --harness omp ~/src/app   # with another harness
+docent --layout x.kdl ~/src/app  # with your own Zellij layout
 docent new                       # inside Zellij: pick a directory and a harness (or press Alt w)
 ```
 

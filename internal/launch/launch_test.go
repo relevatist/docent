@@ -10,70 +10,116 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/relevatist/docent/assets"
 	"github.com/relevatist/docent/internal/config"
 	"github.com/relevatist/docent/internal/zellij"
 )
 
 var cat = config.Harness{Command: "cat", Kind: "cat"}
 
-func TestLayout(t *testing.T) {
-	kdl, err := Layout(config.Harness{Command: `omp --model "x"`, Kind: "omp"}, `my "app"`)
+func layout(t *testing.T, h config.Harness, name string) string {
+	t.Helper()
+	kdl, err := Layout(assets.ZellijLayout, h, "", name)
 	if err != nil {
 		t.Fatal(err)
 	}
+	return kdl
+}
+
+func TestLayout(t *testing.T) {
+	kdl := layout(t, config.Harness{Command: `omp --model "x"`, Kind: "omp"}, `my "app"`)
 	for _, want := range []string{
 		`tab name="my \"app\"" {`,
-		`pane name="editor" command="hx" size="60%" focus=true`,
-		`pane name="harness" command="omp"`,
+		`pane name="harness" size="50%" focus=true command="omp" {`,
 		`args "--model" "\"x\""`,
 		`pane name="shell"`,
+		`pane name="editor" command="hx"` + "\n",
 	} {
 		if !strings.Contains(kdl, want) {
 			t.Errorf("layout missing %q:\n%s", want, kdl)
 		}
 	}
-	editor, harness, shell := strings.Index(kdl, `"editor"`), strings.Index(kdl, `"harness"`), strings.Index(kdl, `"shell"`)
-	if editor >= harness || harness >= shell {
-		t.Errorf("want editor, harness, shell order:\n%s", kdl)
+	harness, shell, editor := strings.Index(kdl, `"harness"`), strings.Index(kdl, `"shell"`), strings.Index(kdl, `"editor"`)
+	if harness >= shell || shell >= editor {
+		t.Errorf("want harness, shell, editor order:\n%s", kdl)
+	}
+	if n := strings.Count(kdl, "focus"); n != 1 {
+		t.Errorf("want focus only on the harness, got %d:\n%s", n, kdl)
 	}
 }
 
 func TestLayoutNoArgs(t *testing.T) {
-	kdl, err := Layout(config.Harness{Command: "claude", Kind: "claude"}, "app")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(kdl, "args") {
-		t.Errorf("unexpected args:\n%s", kdl)
+	kdl := layout(t, config.Harness{Command: "claude", Kind: "claude"}, "app")
+	if !strings.Contains(kdl, `pane name="harness" size="50%" focus=true command="claude"`+"\n") || strings.Contains(kdl, "args") {
+		t.Errorf("want harness without args:\n%s", kdl)
 	}
 }
 
 func TestLayoutKind(t *testing.T) {
-	kdl, err := Layout(config.Harness{Command: "sandbox-exec -f omp.sb omp", Kind: "omp"}, "app")
-	if err != nil {
-		t.Fatal(err)
-	}
+	kdl := layout(t, config.Harness{Command: "sandbox-exec -f omp.sb omp", Kind: "omp"}, "app")
 	for _, want := range []string{
-		`pane name="editor" command="hx" size="60%" focus=true`,
-		`pane name="harness" command="/usr/bin/env"`,
+		`pane name="harness" size="50%" focus=true command="/usr/bin/env" {`,
 		`args "DOCENT_HARNESS_KIND=omp" "sandbox-exec" "-f" "omp.sb" "omp"`,
 	} {
 		if !strings.Contains(kdl, want) {
 			t.Errorf("layout missing %q:\n%s", want, kdl)
 		}
 	}
-	kdl, err = Layout(config.Harness{Command: "/opt/bin/claude --model x", Kind: "claude"}, "app")
-	if err != nil {
-		t.Fatal(err)
-	}
+	kdl = layout(t, config.Harness{Command: "/opt/bin/claude --model x", Kind: "claude"}, "app")
 	if strings.Contains(kdl, "env") || !strings.Contains(kdl, `command="/opt/bin/claude"`) {
 		t.Errorf("harness wrapped although the kind matches:\n%s", kdl)
 	}
 }
 
+func TestLayoutCustom(t *testing.T) {
+	kdl, err := Layout(assets.ZellijLayout, config.Harness{Command: "claude --x", Kind: "claude"}, "/my layouts/pair.kdl", "app")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `command="/usr/bin/env" {` + "\n" + `                args "DOCENT_HARNESS_KIND=claude" "DOCENT_LAYOUT=/my%20layouts/pair.kdl" "claude" "--x"`
+	if !strings.Contains(kdl, want) {
+		t.Errorf("layout missing %q:\n%s", want, kdl)
+	}
+}
+
 func TestLayoutEmptyHarness(t *testing.T) {
-	if _, err := Layout(config.Harness{Command: "  "}, "app"); err == nil {
+	if _, err := Layout(assets.ZellijLayout, config.Harness{Command: "  "}, "", "app"); err == nil {
 		t.Error("want error for empty harness")
+	}
+}
+
+func TestLayoutChecks(t *testing.T) {
+	panes := `pane name="harness" {{.Harness}}
+pane name="shell"
+pane name="editor"`
+	for _, tc := range []struct{ tmpl, want string }{
+		{"tab name={{.Name}\n" + panes, "bad character"},
+		{"tab name={{.Nmae}}\n" + panes, "Nmae"},
+		{"tab name={{.Nmae}}\n" + panes, "fields: {{.Name}}, {{.Harness}}"},
+		{strings.Replace(panes, "{{.Harness}}", `command="claude"`, 1), "{{.Harness}}"},
+		{strings.Replace(panes, `name="editor"`, "", 1), "editor"},
+		{strings.Replace(panes, `name="harness"`, "", 1), "harness"},
+		{strings.Replace(panes, `name="shell"`, "", 1), "shell"},
+	} {
+		_, err := Layout(tc.tmpl, cat, "/x/pair.kdl", "app")
+		if err == nil || !strings.Contains(err.Error(), "/x/pair.kdl") || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("template %q: want error naming the file and %q, got %v", tc.tmpl, tc.want, err)
+		}
+	}
+	if _, err := Layout(panes, cat, "/x/pair.kdl", "app"); err != nil {
+		t.Errorf("valid template: %v", err)
+	}
+}
+
+func TestRunBadLayout(t *testing.T) {
+	f := &zellij.Fake{}
+	attach := func(string, ...string) error { t.Error("attach called"); return nil }
+	err := Run(f, attach, io.Discard, t.TempDir(), "", cat, "{{.Nmae}}", "/x/bad.kdl", true)
+	if err == nil || !strings.Contains(err.Error(), "/x/bad.kdl") {
+		t.Errorf("want error naming the layout, got %v", err)
+	}
+	if len(f.Calls) != 0 {
+		t.Errorf("unexpected zellij calls: %q", f.Calls)
 	}
 }
 
@@ -101,7 +147,7 @@ func run(t *testing.T, name string, inZellij bool, sessions string) (*zellij.Fak
 		return nil
 	}
 	var warn bytes.Buffer
-	err := Run(f, attach, &warn, t.TempDir(), name, cat, inZellij)
+	err := Run(f, attach, &warn, t.TempDir(), name, cat, assets.ZellijLayout, "", inZellij)
 	return f, calls, warn.String(), err
 }
 
@@ -111,7 +157,7 @@ func (failWriter) Write([]byte) (int, error) { return 0, errors.New("write faile
 
 func TestRunWarningWriteFails(t *testing.T) {
 	f := &zellij.Fake{Out: map[string]string{"--version": "zellij 0.44.0"}}
-	if err := Run(f, nil, failWriter{}, t.TempDir(), "", cat, true); err == nil {
+	if err := Run(f, nil, failWriter{}, t.TempDir(), "", cat, assets.ZellijLayout, "", true); err == nil {
 		t.Error("want write error")
 	}
 }
@@ -126,7 +172,7 @@ func TestRunInsideZellij(t *testing.T) {
 	}
 	last := f.Calls[len(f.Calls)-1]
 	dir := last[len(last)-1]
-	kdl, _ := Layout(cat, filepath.Base(dir))
+	kdl := layout(t, cat, filepath.Base(dir))
 	want := []string{"action", "new-tab", "--layout-string", kdl, "--name", filepath.Base(dir), "--cwd", dir}
 	if !slices.Equal(last, want) {
 		t.Errorf("got %q, want %q", last, want)
@@ -145,7 +191,7 @@ func TestRunOutsideZellij(t *testing.T) {
 		t.Fatalf("want one attach, got %v", calls)
 	}
 	session := filepath.Base(calls[0].dir)
-	kdl, _ := Layout(cat, session)
+	kdl := layout(t, cat, session)
 	want := []string{"--session", session, "--new-session-with-layout", kdl}
 	if !slices.Equal(calls[0].args, want) {
 		t.Errorf("got %q, want %q", calls[0].args, want)
@@ -168,14 +214,14 @@ func TestRunOutsideZellijSessionExists(t *testing.T) {
 	}
 	f.Out = map[string]string{"--version": "zellij 0.45.1", "list-sessions --no-formatting": "x [Created 1s ago] \napp [Created 2s ago] \n"}
 	var warn bytes.Buffer
-	if err := Run(f, attach, &warn, dir, "", cat, false); err != nil {
+	if err := Run(f, attach, &warn, dir, "", cat, assets.ZellijLayout, "", false); err != nil {
 		t.Fatal(err)
 	}
 	if warn.Len() != 0 {
 		t.Errorf("unexpected warning %q", warn.String())
 	}
 	last := f.Calls[len(f.Calls)-1]
-	kdl, _ := Layout(cat, "app")
+	kdl := layout(t, cat, "app")
 	want := []string{"--session", "app", "action", "new-tab", "--layout-string", kdl, "--name", "app", "--cwd", dir}
 	if !slices.Equal(last, want) {
 		t.Errorf("got %q, want %q", last, want)
@@ -231,7 +277,7 @@ func TestSessionState(t *testing.T) {
 }
 
 func TestRunOutsideZellijSessions(t *testing.T) {
-	kdl, _ := Layout(cat, "app")
+	kdl := layout(t, cat, "app")
 	for _, tc := range []struct {
 		sessions string
 		calls    [][]string
@@ -260,7 +306,7 @@ func TestRunOutsideZellijSessions(t *testing.T) {
 			t.Fatal(err)
 		}
 		var stderr bytes.Buffer
-		if err := Run(f, attach, &stderr, dir, "", cat, false); err != nil {
+		if err := Run(f, attach, &stderr, dir, "", cat, assets.ZellijLayout, "", false); err != nil {
 			t.Fatal(err)
 		}
 		want := append([][]string{{"--version"}, {"list-sessions", "--no-formatting"}}, tc.calls...)
@@ -284,7 +330,7 @@ func TestRunOutsideZellijSessions(t *testing.T) {
 func TestRunMissingDir(t *testing.T) {
 	f := &zellij.Fake{}
 	attach := func(string, ...string) error { t.Error("attach called"); return nil }
-	err := Run(f, attach, io.Discard, "/no/such/dir", "", cat, true)
+	err := Run(f, attach, io.Discard, "/no/such/dir", "", cat, assets.ZellijLayout, "", true)
 	if err == nil || !strings.Contains(err.Error(), "/no/such/dir") {
 		t.Errorf("want error naming dir, got %v", err)
 	}
@@ -305,5 +351,24 @@ func TestOldVersion(t *testing.T) {
 		if got := OldVersion(out); got != want {
 			t.Errorf("OldVersion(%q) = %v, want %v", out, got, want)
 		}
+	}
+}
+
+func TestLayoutDocExample(t *testing.T) {
+	doc, err := os.ReadFile("../../docs/workstreams.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, after, ok := strings.Cut(string(doc), "```kdl\n")
+	example, _, _ := strings.Cut(after, "```")
+	if !ok {
+		t.Fatal("no kdl example in docs/workstreams.md")
+	}
+	kdl, err := Layout(example, cat, "/x/old.kdl", "app")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(kdl, `pane name="editor" command="hx" size="60%" focus=true`) {
+		t.Errorf("example is not the old layout:\n%s", kdl)
 	}
 }

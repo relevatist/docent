@@ -6,6 +6,7 @@ import (
 	"encoding/json/v2"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -109,31 +110,55 @@ func terminals(r zellij.Runner) ([]pane, error) {
 }
 
 // KindVar is the variable that a docent layout sets on a harness pane whose
-// kind differs from the base name of its command.
+// kind differs from the base name of its command, or that uses a custom layout.
 const KindVar = "DOCENT_HARNESS_KIND"
 
-// Marker returns the kind in an `env DOCENT_HARNESS_KIND=kind cmd...` pane command.
+// LayoutVar is the variable that a docent layout sets on the harness pane of a
+// tab with a custom layout. Its value is the URL-escaped path (slashes kept).
+const LayoutVar = "DOCENT_LAYOUT"
+
+// Marker returns the kind in an `env DOCENT_HARNESS_KIND=v ... cmd` pane command.
 func Marker(cmd string) (string, bool) {
-	kind, _, ok := unwrap(cmd)
-	return kind, ok
+	vars, _ := unwrap(cmd)
+	kind := vars[KindVar]
+	return kind, kind != ""
 }
 
-// Unwrap returns cmd without a leading `env DOCENT_HARNESS_KIND=kind`.
+// LayoutMarker returns the unescaped DOCENT_LAYOUT path.
+func LayoutMarker(cmd string) (string, bool) {
+	vars, _ := unwrap(cmd)
+	p, err := url.PathUnescape(vars[LayoutVar])
+	return p, err == nil && p != ""
+}
+
+// Unwrap returns cmd without `env` and the leading KindVar and LayoutVar words.
 func Unwrap(cmd string) string {
-	if _, rest, ok := unwrap(cmd); ok {
-		return rest
-	}
-	return cmd
+	_, rest := unwrap(cmd)
+	return rest
 }
 
 // unwrap splits on single spaces: list-panes joins the argv with spaces and
-// no quotes, and the kind is one word.
-func unwrap(cmd string) (kind, rest string, ok bool) {
+// no quotes, and each value is one word.
+func unwrap(cmd string) (vars map[string]string, rest string) {
 	env, rest, _ := strings.Cut(cmd, " ")
-	kv, rest, _ := strings.Cut(rest, " ")
-	kind, ok = strings.CutPrefix(kv, KindVar+"=")
-	if filepath.Base(env) != "env" || !ok || kind == "" || rest == "" {
-		return "", "", false
+	if filepath.Base(env) != "env" {
+		return nil, cmd
 	}
-	return kind, rest, true
+	vars = map[string]string{}
+	for {
+		word, after, found := strings.Cut(rest, " ")
+		k, v, ok := strings.Cut(word, "=")
+		if !ok || k != KindVar && k != LayoutVar {
+			break
+		}
+		if !found {
+			return nil, cmd
+		}
+		vars[k] = v
+		rest = after
+	}
+	if len(vars) == 0 {
+		return nil, cmd
+	}
+	return vars, rest
 }

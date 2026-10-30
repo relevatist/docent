@@ -11,6 +11,16 @@ echo "some text" | docent send text
 docent tour /tmp/tour.json       # start a guided tour, see tours.md
 ```
 
+## `docent [dir]`
+
+Opens a workstream for `dir` (default: the current directory). Run it inside or outside Zellij. See [Workstreams](workstreams.md).
+
+| Flag | Meaning |
+|------|---------|
+| `--name name` | tab or session name (default: the directory basename) |
+| `--harness cmd\|alias` | harness command or alias; overrides the config `harness` |
+| `--layout file` | Zellij layout file; overrides the config `layout`, see [Custom layout](workstreams.md#custom-layout) |
+
 ## `docent open`
 
 Shows a file in the editor. `:line` is optional.
