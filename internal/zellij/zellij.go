@@ -50,6 +50,10 @@ func ListPanes(r Runner) ([]byte, error) {
 	return r.Run("action", "list-panes", "--all", "--json")
 }
 
+func CurrentTabInfo(r Runner) ([]byte, error) {
+	return r.Run("action", "current-tab-info", "--json")
+}
+
 // Paste pastes text into pane as a bracketed paste.
 func Paste(r Runner, pane, text string) error {
 	return action(r, "paste", "--pane-id", pane, "--", text)

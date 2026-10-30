@@ -31,7 +31,7 @@ A tour is a JSON file:
 
 ## What you see
 
-The tour opens in a `tour` pane, stacked with the shell pane.
+The tour opens in a `tour` pane, stacked with the shell pane, in the tab of the agent that started it. The tour pane gets focus only if you still see that tab.
 
 - The editor shows the step's file at its first line. A step without a file does not move the editor.
 - The tour pane shows the step's position, its file and lines (or the tour title), and its note.

@@ -82,11 +82,11 @@ func TestLookupCommand(t *testing.T) {
 	f := &zellij.Fake{Out: map[string]string{"action list-panes --all --json": string(b)}}
 	t.Setenv("ZELLIJ_PANE_ID", "2")
 	got, err := Lookup(f, "harness")
-	if err != nil || got != (Pane{ID: "terminal_1", Command: "/opt/bin/omp --model x"}) {
+	if err != nil || got != (Pane{ID: "terminal_1", Command: "/opt/bin/omp --model x", Tab: 0}) {
 		t.Errorf("Lookup = %+v, %v", got, err)
 	}
 	t.Setenv("ZELLIJ_PANE_ID", "5")
-	if got, err := Lookup(fake(t), "harness"); err != nil || got != (Pane{ID: "terminal_4"}) {
+	if got, err := Lookup(fake(t), "harness"); err != nil || got != (Pane{ID: "terminal_4", Tab: 1}) {
 		t.Errorf("Lookup = %+v, %v; want no command", got, err)
 	}
 }

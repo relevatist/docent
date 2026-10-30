@@ -33,7 +33,12 @@ type paneFake struct {
 	paneEnv string
 }
 
-func newPaneFake(t *testing.T) *paneFake { return &paneFake{Fake: workstream(t)} }
+// newPaneFake reports activeTab as the user's tab; the shell is in tab 1.
+func newPaneFake(t *testing.T, activeTab string) *paneFake {
+	f := workstream(t)
+	f.Out["action current-tab-info --json"] = `{"name":"x","tab_id":` + activeTab + `}`
+	return &paneFake{Fake: f}
+}
 
 func (f *paneFake) Run(args ...string) ([]byte, error) {
 	out, err := f.Fake.Run(args...)
@@ -55,7 +60,7 @@ func paneCmd(t *testing.T, f *paneFake, cwd string) []string {
 	if last := f.Calls[len(f.Calls)-1]; !slices.Equal(last, []string{"action", "focus-pane-id", "terminal_9"}) {
 		t.Fatalf("tour pane not focused, last call %q", last)
 	}
-	want := []string{"action", "new-pane", "--stacked", "--near-current-pane", "--name", "tour", "--close-on-exit", "--cwd", cwd, "--"}
+	want := []string{"action", "new-pane", "--stacked", "--near-current-pane", "--no-focus", "--name", "tour", "--close-on-exit", "--cwd", cwd, "--"}
 	c := f.Calls[i]
 	if len(c) < len(want) || !slices.Equal(c[:len(want)], want) {
 		t.Fatalf("new-pane call %q", c)
@@ -68,7 +73,7 @@ func TestTourOpensPane(t *testing.T) {
 	if err := os.WriteFile("plan.json", []byte(`{"steps":[{"file":"a.go","lines":[1,2]}]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	f := newPaneFake(t)
+	f := newPaneFake(t, "1")
 	var out bytes.Buffer
 	if code := tourCmd(f, []string{"plan.json"}, nil, &out); code != 0 {
 		t.Fatalf("exit %d: %s", code, out.String())
@@ -88,9 +93,28 @@ func TestTourOpensPane(t *testing.T) {
 	}
 }
 
+func TestTourOtherTabNoFocus(t *testing.T) {
+	workdir(t)
+	f := newPaneFake(t, "0")
+	var out bytes.Buffer
+	if code := tourCmd(f, []string{"-"}, strings.NewReader(`{"steps":[{"note":"x"}]}`), &out); code != 0 {
+		t.Fatalf("exit %d: %s", code, out.String())
+	}
+	i := slices.IndexFunc(f.Calls, func(c []string) bool { return len(c) > 1 && c[1] == "new-pane" })
+	if i < 0 || f.paneEnv != "5" {
+		t.Fatalf("new-pane not issued from the shell pane (env %q), calls %q", f.paneEnv, f.Calls)
+	}
+	if err := os.Remove(f.Calls[i][len(f.Calls[i])-1]); err != nil {
+		t.Error(err)
+	}
+	if slices.ContainsFunc(f.Calls, func(c []string) bool { return c[1] == "focus-pane-id" }) {
+		t.Fatalf("tour pane focused from another tab, calls %q", f.Calls)
+	}
+}
+
 func TestTourStdin(t *testing.T) {
 	dir := workdir(t)
-	f := newPaneFake(t)
+	f := newPaneFake(t, "1")
 	var out bytes.Buffer
 	in := strings.NewReader(`{"base":"nosuchrev","steps":[{"note":"## Overview"},{"file":"a.go"}]}`)
 	if code := tourCmd(f, []string{"-"}, in, &out); code != 0 {

@@ -85,30 +85,36 @@ func startTour(r zellij.Runner, src string, stdin io.Reader) error {
 }
 
 // openTourPane opens a tour pane running `docent tour-view args...`, stacked
-// with the shell pane, and focuses it.
+// with the shell pane, and focuses it if the user still sees the shell's tab.
 func openTourPane(r zellij.Runner, cwd string, args ...string) error {
 	exe, err := os.Executable()
 	if err != nil {
 		return err
 	}
-	shell, err := panes.Find(r, "shell")
+	shell, err := panes.Lookup(r, "shell")
 	if err != nil {
 		return err
 	}
 	cmd := append([]string{exe, "tour-view"}, args...)
-	// --near-current-pane places the pane next to $ZELLIJ_PANE_ID instead of
-	// the user's focus, so point it at the shell. focus-pane-id before
-	// new-pane does not move the client's focus (Zellij 0.45.1).
+	// --near-current-pane --no-focus places the pane next to $ZELLIJ_PANE_ID,
+	// in its tab, instead of in the user's active tab, so point it at the
+	// shell. focus-pane-id before new-pane does not move the client's focus,
+	// and --tab-id conflicts with --near-current-pane (Zellij 0.45.1).
 	self := os.Getenv("ZELLIJ_PANE_ID")
-	if err := os.Setenv("ZELLIJ_PANE_ID", strings.TrimPrefix(shell, "terminal_")); err != nil {
+	if err := os.Setenv("ZELLIJ_PANE_ID", strings.TrimPrefix(shell.ID, "terminal_")); err != nil {
 		return err
 	}
-	id, err := zellij.NewPane(r, append([]string{"--stacked", "--near-current-pane", "--name", "tour", "--close-on-exit", "--cwd", cwd, "--"}, cmd...)...)
+	id, err := zellij.NewPane(r, append([]string{"--stacked", "--near-current-pane", "--no-focus", "--name", "tour", "--close-on-exit", "--cwd", cwd, "--"}, cmd...)...)
 	if serr := os.Setenv("ZELLIJ_PANE_ID", self); serr != nil {
 		return errors.Join(err, serr)
 	}
 	if err != nil || id == "" {
 		return err
+	}
+	// Do not pull the user away from another tab. The pane is open, so an
+	// unknown active tab only skips the focus.
+	if active, err := panes.ActiveTab(r); err != nil || active != shell.Tab {
+		return nil
 	}
 	return zellij.FocusPane(r, id)
 }

@@ -30,6 +30,7 @@ type pane struct {
 type Pane struct {
 	ID      string // terminal_N
 	Command string // command the pane was started with; empty for a shell pane
+	Tab     int    // tab ID
 }
 
 // Find returns the ID (terminal_N) of the terminal pane titled name in the
@@ -64,7 +65,7 @@ func Lookup(r zellij.Runner, name string) (Pane, error) {
 	}
 	for _, p := range terms {
 		if p.TabID == tab && p.Title == name {
-			return Pane{fmt.Sprintf("terminal_%d", p.ID), p.Command}, nil
+			return Pane{fmt.Sprintf("terminal_%d", p.ID), p.Command, p.TabID}, nil
 		}
 	}
 	return Pane{}, fmt.Errorf("no %q pane in this tab", name)
@@ -95,6 +96,21 @@ func Tabs(r zellij.Runner) ([]Tab, error) {
 		}
 	}
 	return tabs, nil
+}
+
+// ActiveTab returns the ID of the tab that the user sees.
+func ActiveTab(r zellij.Runner) (int, error) {
+	out, err := zellij.CurrentTabInfo(r)
+	if err != nil {
+		return 0, err
+	}
+	var tab struct {
+		ID int `json:"tab_id"`
+	}
+	if err := json.Unmarshal(out, &tab); err != nil {
+		return 0, fmt.Errorf("parse current-tab-info: %w", err)
+	}
+	return tab.ID, nil
 }
 
 func terminals(r zellij.Runner) ([]pane, error) {
